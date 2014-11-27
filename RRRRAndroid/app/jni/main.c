@@ -9,7 +9,6 @@
 static tdata_t tdata;
 static char *stops = NULL;
 static size_t stops_len = 0;
-static char *RRRR_INPUT_FILE;
 static jstring RRRR_INPUT_FILE_JAVA;
 
 
@@ -33,33 +32,36 @@ jint JNI_OnUnLoad(JavaVM* vm, void* reserved)
 }
 
 
-JNIEXPORT jstring JNICALL Java_rrrr_citytransport_smarttransport_ru_rrrrandroid_R4_getMessage
+JNIEXPORT jstring JNICALL Java_ru_smarttransport_citytransport_rrrrandroid_R4_getMessage
           (JNIEnv *env, jobject thisObj) {
    return (*env)->NewStringUTF(env, "Hello from native code!");
 }
 
-JNIEXPORT jboolean JNICALL Java_rrrr_citytransport_smarttransport_ru_rrrrandroid_R4_initWithFile
+JNIEXPORT jboolean JNICALL Java_ru_smarttransport_citytransport_rrrrandroid_R4_initWithFile
   (JNIEnv *env, jobject thisObj, jstring filePath)
  {
     const char *nativeString = (*env)->GetStringUTFChars(env, filePath, JNI_FALSE);
 
     __android_log_print(ANDROID_LOG_ERROR, DEBUG_TAG, "%s", nativeString);
 
-    const bool result = tdata_load(&tdata, nativeString);
-    if( (result == false) ) {
-         __android_log_print(ANDROID_LOG_ERROR, DEBUG_TAG, "Error load timetable");
-    }
-    else
-    {
-      __android_log_print(ANDROID_LOG_ERROR, DEBUG_TAG, "Succeess load timetable,yahooo");
-    }
+    const bool result = true;
+
+   tdata_load( nativeString,&tdata);
+   //ansi    tdata_load(&tdata, nativeString);
+//    if( (result == false) ) {
+//         __android_log_print(ANDROID_LOG_ERROR, DEBUG_TAG, "Error load timetable");
+//    }
+//    else
+//    {
+//      __android_log_print(ANDROID_LOG_ERROR, DEBUG_TAG, "Succeess load timetable,yahooo");
+//    }
 
     (*env)->ReleaseStringUTFChars(env, filePath, nativeString);
 
     return (jboolean)result;
  }
 
-JNIEXPORT void JNICALL Java_rrrr_citytransport_smarttransport_ru_rrrrandroid_R4_nativePipeSTDERRToLogcat
+JNIEXPORT void JNICALL Java_ru_smarttransport_citytransport_rrrrandroid_R4_nativePipeSTDERRToLogcat
    (JNIEnv *env, jobject thisObj)
    {
     int pipes[2];
@@ -73,15 +75,15 @@ JNIEXPORT void JNICALL Java_rrrr_citytransport_smarttransport_ru_rrrrandroid_R4_
        }
    }
 
-   JNIEXPORT jobject JNICALL Java_ru_smarttransport_citytransport_utils_R4_initTest (JNIEnv *env, jobject thisObj)
-   {
-       jclass cls = (*env)->FindClass(env, "ru/smarttransport/citytransport/models/Test");
-       jmethodID methodID = (*env)->GetMethodID(env, cls, "<init>", "(ILjava/lang/String;)V");
-       jobject a=(*env)->NewObject(env,cls, methodID, 5, (*env)->NewStringUTF(env, "my test string"));
-       return a;
-   }
+//JNIEXPORT jint JNICALL Java_ru_smarttransport_citytransport_rrrrandroid_R4_getStopIndexbyId (JNIEnv *env, jobject thisObj)
+//   {
+//       jclass cls = (*env)->FindClass(env, "ru/smarttransport/citytransport/models/Test");
+//       jmethodID methodID = (*env)->GetMethodID(env, cls, "<init>", "(ILjava/lang/String;)V");
+//       jobject a=(*env)->NewObject(env,cls, methodID, 5, (*env)->NewStringUTF(env, "my test string"));
+//       return a;
+//   }
 
-   JNIEXPORT jint JNICALL Java_rrrr_citytransport_smarttransport_ru_rrrrandroid_R4_getStopIndexbyId  (JNIEnv *env, jobject thisObj, jstring stopId)
+  JNIEXPORT jint JNICALL Java_ru_smarttransport_citytransport_rrrrandroid_R4_getStopIndexbyId  (JNIEnv *env, jobject thisObj, jstring stopId)
    {
        const char *nativeStopId = (*env)->GetStringUTFChars(env, stopId, JNI_FALSE);
 
@@ -92,29 +94,38 @@ JNIEXPORT void JNICALL Java_rrrr_citytransport_smarttransport_ru_rrrrandroid_R4_
        return (jint) result;
    }
 
-  JNIEXPORT jstring JNICALL Java_rrrr_citytransport_smarttransport_ru_rrrrandroid_R4_planRoute(JNIEnv * env, jobject this, jint from, jint to, jboolean arriveby,jlong epoch)
+JNIEXPORT jstring JNICALL Java_ru_smarttransport_citytransport_rrrrandroid_R4_planRoute(JNIEnv * env, jobject this, jint from, jint to, jboolean arriveby,jlong epoch)
    {
        char result_buf[8000] = "test";
        char *iso_datetime = NULL;
        router_request_t req;
        router_request_initialize(&req);
+
+//       _android_log_print(ANDROID_LOG_ERROR, DEBUG_TAG,"initialize req");
+
        req.from=from;
        req.to=to;
-       req.walk_speed = 1.5;//0.5 - 2.5
+   //    req.walk_speed = 1.5;//0.5 - 2.5
        req.arrive_by=arriveby;
-       req.walk_slack = 500;
+      // req.walk_slack = 500;
        router_request_from_epoch (&req, &tdata, epoch); // from struct_tm instead?
-       req.mode = m_bus;
+     //  req.mode = m_bus;
        router_t router;
+
        router_setup(&router, &tdata);
 
        router_route(&router, &req);
+
        uint32_t n_reversals = req.arrive_by ? 1 : 2;
        for (uint32_t i = 0; i < n_reversals; ++i) {
+               __android_log_print(ANDROID_LOG_ERROR, DEBUG_TAG,"hz iteration");
            router_request_reverse (&router, &req); // handle case where route is not reversed
            router_route (&router, &req);
        }
        int result_length = router_result_dump(&router, &req, result_buf, 8000);
+
+      __android_log_print(ANDROID_LOG_ERROR, DEBUG_TAG,"%i",result_length);
+
        jstring result = (*env)->NewStringUTF(env, result_buf);
        router_teardown(&router);
        return result;

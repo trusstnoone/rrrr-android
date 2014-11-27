@@ -13,7 +13,7 @@ android {
 
         ndk {
             moduleName "R4"
-            cFlags "-std=c99"
+            cFlags "-std=c99 -DHAVE_ALLOCA_H -DHAVE_MALLOC_H -DHAVE_SYS_POLL_H -DHAVE_SYS_SELECT_H -DHAVE_INTTYPES_H -DHAVE_SYS_UIO_H -DHAVE_UNISTD_H -DHAVE_IO_H"
             ldLibs "log"
         }
     }
