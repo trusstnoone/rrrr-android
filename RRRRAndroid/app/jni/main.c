@@ -96,7 +96,7 @@ JNIEXPORT void JNICALL Java_ru_smarttransport_citytransport_rrrrandroid_R4_nativ
 
 JNIEXPORT jstring JNICALL Java_ru_smarttransport_citytransport_rrrrandroid_R4_planRoute(JNIEnv * env, jobject this, jint from, jint to, jboolean arriveby,jlong epoch)
    {
-       char result_buf[8000] = "test";
+       char result_buf[1000000] = "test";
        char *iso_datetime = NULL;
        router_request_t req;
        router_request_initialize(&req);
@@ -116,13 +116,17 @@ JNIEXPORT jstring JNICALL Java_ru_smarttransport_citytransport_rrrrandroid_R4_pl
 
        router_route(&router, &req);
 
-       uint32_t n_reversals = req.arrive_by ? 1 : 2;
-       for (uint32_t i = 0; i < n_reversals; ++i) {
-               __android_log_print(ANDROID_LOG_ERROR, DEBUG_TAG,"hz iteration");
-           router_request_reverse (&router, &req); // handle case where route is not reversed
-           router_route (&router, &req);
-       }
-       int result_length = router_result_dump(&router, &req, result_buf, 8000);
+//       uint32_t n_reversals = req.arrive_by ? 1 : 2;
+//       for (uint32_t i = 0; i < n_reversals; ++i) {
+//               __android_log_print(ANDROID_LOG_ERROR, DEBUG_TAG,"hz iteration");
+//           router_request_reverse (&router, &req); // handle case where route is not reversed
+//           router_route (&router, &req);
+//       }
+      struct plan plan;
+      router_result_to_plan (&plan, &router, &req);
+
+     //  int result_length = router_result_dump(&router, &req, result_buf, 8000);
+     int result_length = render_plan_json(&plan, &tdata, result_buf, 1000000);
 
       __android_log_print(ANDROID_LOG_ERROR, DEBUG_TAG,"%i",result_length);
 
