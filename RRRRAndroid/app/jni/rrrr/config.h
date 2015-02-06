@@ -1,52 +1,50 @@
-/* Copyright 2013 Bliksem Labs. See the LICENSE file at the top-level directory of this distribution and at https://github.com/bliksemlabs/rrrr/. */
+#ifndef _CONFIG_H
+#define _CONFIG_H
 
-/* config.h */
+/* These are the default options for a router_request */
 
-#define RRRR_TEST_CONCURRENCY 4
-#define RRRR_INPUT_FILE "timetable.dat"
+/* Maximum iterations the algorithm will run */
+#define RRRR_DEFAULT_MAX_ROUNDS 6
 
-// runtime increases roughly linearly with this value, though with target pruning it no longer seems to have as much effect
-// this must be set to at least 2, because we re-use one array for the initial state
-#define RRRR_MAX_ROUNDS 6
+/* Walk slack in seconds */
+#define RRRR_DEFAULT_WALK_SLACK 0
 
-/* note that these values can cause missed transfers until we have guaranteed / timed transfers */
+/* Speed by foot, in meter per second */
+#define RRRR_DEFAULT_WALK_SPEED 1.5
 
-// specify in seconds
-#define RRRR_WALK_SLACK_SEC  0
-// specify in internal 4-second intervals!
-#define RRRR_XFER_SLACK_4SEC 0
+/* Maximum distance in meters to travel by feet from the
+ * origin to the first stop_point, and from the last stop_point to
+ * the destination.
+ */
+#define RRRR_DEFAULT_WALK_MAX_DISTANCE 500
 
-// TODO: Max transfer time to avoid unnecessary branching?
+#define RRRR_MAX_BANNED_JOURNEY_PATTERNS 1
+#define RRRR_MAX_BANNED_STOP_POINTS 1
+#define RRRR_MAX_BANNED_STOP_POINTS_HARD 1
+#define RRRR_MAX_BANNED_VEHICLE_JOURNEYS 1
 
-// bind does not work with names (localhost) but does work with * (all interfaces)
-#define CLIENT_ENDPOINT "tcp://127.0.0.1:9292"
-#define WORKER_ENDPOINT "tcp://127.0.0.1:9293"
+#define RRRR_FEATURE_LATLON 1
 
-// use named pipes instead
-// #define CLIENT_ENDPOINT "ipc://client_pipe"
-// #define WORKER_ENDPOINT "ipc://worker_pipe"
+#define RRRR_WALK_COMP 1.2
 
-// #define RRRR_INFO
-// #define RRRR_DEBUG // do not name this DEBUG because some IDEs may define DEBUG
-// #define RRRR_TRACE
+#define RRRR_BANNED_JOURNEY_PATTERNS_BITMASK 0
 
-/* http://stackoverflow.com/questions/1644868/c-define-macro-for-debug-printing */
-#ifdef RRRR_INFO
- #define I
-#else
- #define I for(;0;)
+#if RRRR_MAX_BANNED_JOURNEY_PATTERNS == 0
+#undef RRRR_BANNED_JOURNEY_PATTERNS_BITMASK
 #endif
 
-#ifdef RRRR_DEBUG
- #define D
-#else
- #define D for(;0;)
+#if (defined(RRRR_TDATA_IO_MMAP) && defined(RRRR_TDATA_IO_DYNAMIC)) || (!defined(RRRR_TDATA_IO_MMAP) && !defined(RRRR_TDATA_IO_DYNAMIC))
+#define RRRR_TDATA_IO_DYNAMIC 1
 #endif
 
-#ifdef RRRR_TRACE
- #define T
-#else
- #define T for(;0;)
-#endif
+#define RRRR_DYNAMIC_SLACK 2
+/* roughly the length of common prefixes in IDs */
+#define RRRR_RADIXTREE_PREFIX_SIZE 4
 
-#define FEATURE_AGENCY_FILTER 1
+/* with prefix size of 4 and -m32, edge size is 16 bytes, total 11.9MB
+ * with prefix size of 4 and -m64, edge size is 24 bytes, total 17.8MB
+ * total size of all ids is 15.6 MB
+ * could use int indexes into a fixed-size, pre-allocated edge pool.
+ */
+
+#endif

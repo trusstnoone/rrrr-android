@@ -1,4 +1,7 @@
-/* Copyright 2013 Bliksem Labs. See the LICENSE file at the top-level directory of this distribution and at https://github.com/bliksemlabs/rrrr/. */
+/* Copyright 2013 Bliksem Labs.
+ * See the LICENSE file at the top-level directory of this distribution and at
+ * https://github.com/bliksemlabs/rrrr/
+ */
 
 /* hashgrid.h */
 
@@ -6,42 +9,77 @@
 #define _HASHGRID_H
 
 #include "geometry.h"
+#include "config.h"
 #include <stdint.h>
 #include <stdbool.h>
 
 #define HASHGRID_NONE UINT32_MAX
 
-typedef struct HashGrid {
+#ifndef INFINITY
+#define INFINITY 9999999.0
+#endif
+
+typedef struct hashgrid_s hashgrid_t;
+struct hashgrid_s {
+    /* the array of coords that were indexed
+     * note: may have been deallocated by caller
+     */
+    coord_t *coords;
+
+    /* array containing all the binned items,
+     * aliased by the bins array
+     */
+    uint32_t     *items;
+
+    /* 2D array of counts */
+    uint32_t     *counts;
+
+    /* 2D array of uint32_t pointers */
+    uint32_t     **bins;
+
+    double       bin_size_meters;
+    coord_t      bin_size;
     uint32_t     grid_dim;
-    double  bin_size_meters;
-    coord_t bin_size;
     uint32_t     n_items;
-    uint32_t     (*counts)[]; // 2D array of counts
-    uint32_t     *(*bins)[];  // 2D array of uint32_t pointers
-    uint32_t     *items;      // array containing all the binned items, aliased by the bins array
-    coord_t *coords;          // the array of coords that were indexed (note: may have been deallocated by caller)
-} HashGrid;
+};
 
-typedef struct HashGridResult {
-    HashGrid *hg;
-    coord_t coord;                   // the query coordinate
-    double radius_meters;            // query radius in meters
-    coord_t min, max;                // defines a bounding box around the result in projected brads
-    uint32_t xmin, xmax, ymin, ymax; // bins that correspond to the bounding box
-    uint32_t x, y, i;                // current position within the hashgrid for iterating over results
+typedef struct hashgrid_result_s hashgrid_result_t;
+struct hashgrid_result_s {
+    hashgrid_t *hg;
+
+    /* query radius in meters */
+    double radius_meters;
+
+    /* the query coordinate */
+    coord_t coord;
+
+    /* defines a bounding box around the result in projected brads */
+    coord_t min, max;
+
+    /* bins that correspond to the bounding box */
+    uint32_t xmin, xmax, ymin, ymax;
+
+    /* current position within the hashgrid for iterating over results */
+    uint32_t x, y, i;
     bool has_next;
-} HashGridResult;
+};
 
-void HashGrid_init (HashGrid *hg, uint32_t grid_dim, double bin_size_meters, coord_t *coords, uint32_t n_items);
+void hashgrid_init (hashgrid_t *hg, uint32_t grid_dim, double bin_size_meters, coord_t *coords, uint32_t n_items);
 
-void HashGrid_dump (HashGrid*);
+void hashgrid_query (hashgrid_t *, hashgrid_result_t *, coord_t, double radius_meters);
 
-void HashGrid_query (HashGrid*, HashGridResult*, coord_t, double radius_meters);
+void hashgrid_teardown (hashgrid_t *);
 
-void HashGrid_teardown (HashGrid*);
+void hashgrid_result_reset (hashgrid_result_t *);
 
-uint32_t HashGridResult_next_filtered (HashGridResult *r, double *distance);
+uint32_t hashgrid_result_next_filtered (hashgrid_result_t *r, double *distance);
 
-uint32_t HashGridResult_closest (HashGridResult *r);
+uint32_t hashgrid_result_next (hashgrid_result_t *r);
 
-#endif // _HASHGRID_H
+uint32_t hashgrid_result_closest (hashgrid_result_t *r);
+
+#ifdef RRRR_DEBUG
+void hashgrid_dump (hashgrid_t *);
+#endif
+
+#endif /* _HASHGRID_H */

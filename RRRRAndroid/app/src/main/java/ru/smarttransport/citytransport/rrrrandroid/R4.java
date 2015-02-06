@@ -16,12 +16,11 @@ public class R4 {
     public native boolean initWithFile(String filePath);
 
 
-
     public native void nativePipeSTDERRToLogcat();
 
     public native int getStopIndexbyId(String stopId);
 
-    private native String planRoute(int from, int to, boolean arriveby, long time);
+    public native String planRoute(int from, int to, boolean arriveby, long time);
 
 
 }

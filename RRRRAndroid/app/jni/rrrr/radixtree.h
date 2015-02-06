@@ -1,47 +1,60 @@
-/* Copyright 2013 Bliksem Labs. See the LICENSE file at the top-level directory of this distribution and at https://github.com/bliksemlabs/rrrr/. */
-
-/* radixtree.h */
+/* Copyright 2013 Bliksem Labs.
+ * See the LICENSE file at the top-level directory of this distribution and at
+ * https://github.com/bliksemlabs/rrrr/
+ */
 
 #ifndef _RADIXTREE_H
 #define _RADIXTREE_H
 
+#include "config.h"
+
 #include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
 
-// roughly the length of common prefixes in IDs
-#define RADIX_TREE_PREFIX_SIZE 4
-#define RADIX_TREE_NONE UINT32_MAX
+#define RADIXTREE_NONE UINT32_MAX
 
-// with prefix size of 4 and -m32, edge size is 16 bytes, total 11.9MB
-// with prefix size of 4 and -m64, edge size is 24 bytes, total 17.8MB
-// total size of all ids is 15.6 MB
-// could use int indexes into a fixed-size, pre-allocated edge pool.
+/* Represents both an edge and the node it leads to. A zero-length prefix
+ * indicates an empty edge list. A NULL next-pointer indicates the last edge
+ * in the list.
+ */
+struct rxt_edge {
+    /* the next parallel edge out of the same parent node,
+     * NULL indicates end of list
+     */
+    struct rxt_edge *next;
 
-/* Represents both an edge and the node it leads to. A zero-length prefix indicates an empty edge list. A NULL next-pointer indicates the last edge in the list. */
-// TODO RENAME rxt_edge
-struct edge {
-    struct edge *next;  // the next parallel edge out of the same parent node (NULL indicates end of list)
-    struct edge *child; // the first edge in the list reached by traversing this edge (consuming its prefix)
+    /* the first edge in the list reached by traversing this
+     * edge (consuming its prefix)
+     */
+    struct rxt_edge *child;
     uint32_t value;
-    char prefix[RADIX_TREE_PREFIX_SIZE];
+    char prefix[RRRR_RADIXTREE_PREFIX_SIZE];
 };
 
-// TODO probably better to have two different structs for clarity
-typedef struct edge RadixTree;
+typedef struct radixtree_s radixtree_t;
+struct radixtree_s {
+    struct rxt_edge *root;
+    void *base;
+    size_t size;
+};
 
-RadixTree *rxt_load_strings_from_file (char *filename);
+radixtree_t *radixtree_new ();
 
-RadixTree *rxt_load_strings_from_tdata (char *strings, uint32_t width, uint32_t length);
+radixtree_t *radixtree_load_strings_from_file (char *filename);
 
-RadixTree *rxt_new ();
+radixtree_t *radixtree_load_strings_from_tdata (char *strings, uint32_t width, uint32_t length);
 
-void rxt_insert (struct edge *root, const char *key, uint32_t value);
+void radixtree_destroy (radixtree_t *r);
 
-uint32_t rxt_find (struct edge *root, const char *key);
+bool radixtree_insert (radixtree_t *r, const char *key, uint32_t value);
 
-/* Debug functions */
+uint32_t radixtree_find (radixtree_t *r, const char *key);
 
-int rxt_edge_count (struct edge *e);
+#ifdef RRRR_DEBUG
+uint32_t radixtree_edge_count (struct rxt_edge *e);
 
-void rxt_edge_print (struct edge *e);
+void radixtree_edge_print (struct rxt_edge *e);
+#endif
 
-#endif // _RADIXTREE_H
+#endif /* _RADIXTREE_H */

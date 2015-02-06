@@ -1,24 +1,36 @@
-/* Copyright 2013 Bliksem Labs. See the LICENSE file at the top-level directory of this distribution and at https://github.com/bliksemlabs/rrrr/. */
-
 /* polyline.h */
 /* https://developers.google.com/maps/documentation/utilities/polylinealgorithm */
 
 #include "geometry.h"
-#include "tdata.h"
-#include "router.h"
+#include "router_result.h"
+
+/* For The Netherlands our longest journey pattern is 124 stops
+ * it would be sufficient to allocate only 124 * 13 bytes.
+ */
+
+#define PL_BUFLEN 1996
+
+typedef struct polyline polyline_t;
+struct polyline {
+    double last_lat;
+    double last_lon;
+    char  *buf_cur;
+    char  *buf_max;
+    uint32_t n_points;
+    char   buf[PL_BUFLEN];
+};
 
 int encode_double (double c, char *buf);
 
 int encode_latlon (latlon_t ll, char *buf);
 
-void polyline_begin ();
+void polyline_begin (polyline_t *pl);
 
-void polyline_point (double lat, double lon);
+void polyline_point (polyline_t *pl, double lat, double lon);
 
-void polyline_latlon (latlon_t ll);
+void polyline_latlon (polyline_t *pl, latlon_t ll);
 
-char *polyline_result (); // this could just be a global variable
+char *polyline_result (polyline_t *pl);
 
-uint32_t polyline_length (); // number of points in the polyline
-
-void polyline_for_leg (tdata_t *tdata, struct leg *leg);
+/* number of points in the polyline */
+uint32_t polyline_length (polyline_t *pl);

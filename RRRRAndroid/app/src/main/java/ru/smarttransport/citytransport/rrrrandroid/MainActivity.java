@@ -1,22 +1,64 @@
 package ru.smarttransport.citytransport.rrrrandroid;
 
 import android.app.Activity;
+import android.content.ContextWrapper;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Random;
+
+import ru.smarttransport.citytransport.routemodels.Advice;
 
 
 public class MainActivity extends Activity {
 
+    R4 r4;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        r4 = new R4();
+        copyTimetable();
+        testR4();
+    }
 
+    public void testR4()
+    {
+        r4.initWithFile( new ContextWrapper(this).getFilesDir().getAbsolutePath()
+                 + File.separator + "timetable.dat");
+
+        Random r = new Random();
+        int success = 0;
+
+        for(int i =0; i < 100; i++) {
+            int fromIdx = i;
+            int toIdx = 100 - i;
+
+            Log.e("router","from " +String.valueOf(fromIdx));
+            Log.e("router", "to" + String.valueOf(toIdx));
+
+            String planRoute = r4.planRoute(fromIdx, toIdx, false, java.util.Calendar.getInstance().getTime().getTime());
+            ArrayList<Advice> advices = Advice.parseAdvice(planRoute);
+
+            if(advices.size() > 0 )
+                success++;
+
+            Log.e("router", " plan :"+planRoute);
+        }
+
+        Log.e("router", "count find routes"+String.valueOf(success));
 
 
     }
 
+    public void copyTimetable()
+    {
+        Utils.copyFile("timetable.dat",this);
+    }
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {

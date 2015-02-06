@@ -1,53 +1,52 @@
-/* Copyright 2013 Bliksem Labs. See the LICENSE file at the top-level directory of this distribution and at https://github.com/bliksemlabs/rrrr/. */
-
-/* util.h */
-
-#ifndef _UTIL_H
-#define _UTIL_H
-
+#include "rrrr_types.h"
+#include <stdbool.h>
 #include <stdint.h>
-#include <stdlib.h>
+#include <string.h>
+#include <stddef.h>
 #include <time.h>
-/*
-  2^16 / 60 / 60 is 18.2 hours at one-second resolution.
-  By right-shifting times one bit, we get 36.4 hours (over 1.5 days) at 2 second resolution.
-  By right-shifting times two bits, we get 72.8 hours (over 3 days) at 4 second resolution.
-  Three days is just enough to model yesterday, today, and tomorrow for overnight searches,
-  and can also represent the longest rail journeys in Europe.
-*/
-typedef uint16_t rtime_t;
 
-#define SEC_TO_RTIME(x) ((x) >> 2)
-#define RTIME_TO_SEC(x) (((uint32_t)x) << 2)
-#define RTIME_TO_SEC_SIGNED(x) ((x) << 2)
 
-#define SEC_IN_ONE_MINUTE (60)
-#define SEC_IN_ONE_HOUR   (60 * SEC_IN_ONE_MINUTE)
-#define SEC_IN_ONE_DAY    (24 * SEC_IN_ONE_HOUR)
-#define SEC_IN_TWO_DAYS   (2 * SEC_IN_ONE_DAY)
-#define SEC_IN_THREE_DAYS (3 * SEC_IN_ONE_DAY)
-#define RTIME_ONE_DAY     (SEC_TO_RTIME(SEC_IN_ONE_DAY))
-#define RTIME_TWO_DAYS    (SEC_TO_RTIME(SEC_IN_TWO_DAYS))
-#define RTIME_THREE_DAYS  (SEC_TO_RTIME(SEC_IN_THREE_DAYS))
+#ifndef MIN
+#define MIN(a,b) ((a) < (b) ? a : b)
+#endif
+#ifndef MAX
+#define MAX(a,b) ((a) > (b) ? a : b)
+#endif
 
-// We should avoid relying on the relative value of these preprocessor constants (inequalities)
-// since they will be used in both departAfter and arriveBy searches.
-#define UNREACHED UINT16_MAX
-#define NONE      (UINT32_MAX)
-#define WALK      (UINT32_MAX - 1)
-#define ONBOARD   (UINT32_MAX - 2)
-#define CANCELED  INT16_MAX
+#ifndef UNUSED
+#define UNUSED(expr) (void)(expr)
+#endif
 
-#define AGENCY_UNFILTERED (UINT16_MAX)
+#if defined (HAVE_LOCALTIME_R)
+    #define rrrr_localtime_r(a, b) localtime_r(a, b)
+#elif defined (HAVE_LOCALTIME_S)
+    #define rrrr_localtime_r(a, b) localtime_s(b, a)
+#else
+    #define rrrr_localtime_r(a, b) { \
+    struct tm *tmpstm = localtime (a); \
+    memcpy (b, tmpstm, sizeof(struct tm));\
+}
+#endif
 
-void die(const char* message);
+#if defined (HAVE_GMTIME_R)
+    #define rrrr_gmtime_r(a, b) gmtime_r(a, b)
+#elif defined (HAVE_GMTIME_S)
+    #define rrrr_gmtime_r(a, b) gmtime_s(b, a)
+#else
+    #define rrrr_gmtime_r(a, b) { \
+    struct tm *tmpstm = gmtime (a); \
+    memcpy (b, tmpstm, sizeof(struct tm));\
+}
+#endif
 
-char *btimetext(rtime_t t, char *buf); // minimum buffer size is 9 characters
+#define rrrr_memset(s, u, n) { size_t i = n; do { i--; s[i] = u; } while (i); }
 
-char *timetext(rtime_t t);
-
+uint32_t rrrrandom(uint32_t limit);
 void printBits(size_t const size, void const * const ptr);
+rtime_t epoch_to_rtime (time_t epochtime, struct tm *tm_out);
+char *btimetext(rtime_t rt, char *buf);
+char *timetext(rtime_t t);
+time_t strtoepoch (char *time);
+char * strcasestr(const char *s, const char *find);
 
-rtime_t epoch_to_rtime (time_t epochtime, struct tm *localtm);
-
-#endif // _UTIL_H
+double round(double x);

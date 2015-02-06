@@ -1,46 +1,66 @@
 /* Copyright 2013 Bliksem Labs. See the LICENSE file at the top-level directory of this distribution and at https://github.com/bliksemlabs/rrrr/. */
 
 /* tdata.h */
+
 #ifndef _TDATA_H
 #define _TDATA_H
 
+#include "config.h"
 #include "geometry.h"
-#include "util.h"
-#include "radixtree.h"
+#include "rrrr_types.h"
+
+#ifdef RRRR_FEATURE_REALTIME
 #include "gtfs-realtime.pb-c.h"
+#include "radixtree.h"
+#endif
 
 #include <stddef.h>
+#include <stdbool.h>
 
-typedef uint32_t calendar_t;
-
-typedef struct stop stop_t;
-struct stop {
-    uint32_t stop_routes_offset;
+typedef struct stop_point stop_point_t;
+struct stop_point {
+    uint32_t journey_patterns_at_stop_point_offset;
     uint32_t transfers_offset;
 };
 
-/* An individual Route in the RAPTOR sense: A group of VehicleJourneys all having the same JourneyPattern. */
-typedef struct route route_t;
-struct route {
-    uint32_t route_stops_offset;
-    uint32_t trip_ids_offset;
-    uint32_t headsign_offset;
-    uint16_t n_stops;
-    uint16_t n_trips;
+/* An individual JourneyPattern in the RAPTOR sense:
+ * A group of VehicleJourneys all share the same JourneyPattern.
+ */
+typedef struct journey_pattern journey_pattern_t;
+struct journey_pattern {
+    uint32_t journey_pattern_point_offset;
+    uint32_t vj_offset;
+    jppidx_t n_stops;
+    jp_vjoffset_t n_vjs;
     uint16_t attributes;
-    uint16_t agency_index;
-    uint16_t shortname_index;
-    uint16_t productcategory_index;
+    uint16_t route_index;
     rtime_t  min_time;
     rtime_t  max_time;
 };
 
-/* An individual VehicleJourney, a materialized instance of a time demand type. */
-typedef struct trip trip_t;
-struct trip {
-    uint32_t stop_times_offset; // The offset of the first stoptime of the time demand type used by this trip
-    rtime_t  begin_time;        // The absolute start time since at the departure of the first stop
-    int16_t  realtime_delay;    // This is signed to indicate early or late. All zeros upon creation (but serves as padding).
+/* An individual VehicleJourney,
+ * a materialized instance of a time demand type. */
+typedef struct vehicle_journey vehicle_journey_t;
+struct vehicle_journey {
+    /* The offset of the first stoptime of the
+     * time demand type used by this vehicle_journey.
+     */
+    uint32_t stop_times_offset;
+
+    /* The absolute start time since at the
+     * departure of the first stop
+     */
+    rtime_t  begin_time;
+
+    /* The vj_attributes, including CANCELED flag
+     */
+    uint16_t vj_attributes;
+};
+
+typedef struct vehicle_journey_ref vehicle_journey_ref_t;
+struct vehicle_journey_ref {
+    jppidx_t journey_pattern_index;
+    jp_vjoffset_t vehicle_journey_index;
 };
 
 typedef struct stoptime stoptime_t;
@@ -50,161 +70,263 @@ struct stoptime {
 };
 
 typedef enum stop_attribute {
-    sa_wheelchair_boarding  =   1, // wheelchair accessible
-    sa_visual_accessible    =   2, // accessible for blind people
-    sa_shelter              =   4, // roof against rain
-    sa_bikeshed             =   8, // you can put your bike somewhere
-    sa_bicyclerent          =  16, // you can rent a bicycle
-    sa_parking              =  32  // carparking is available
+    /* the stop is accessible for a wheelchair */
+    sa_wheelchair_boarding  =   1,
+
+    /* the stop is accessible for the visible impaired */
+    sa_visual_accessible    =   2,
+
+    /* a shelter is available against rain */
+    sa_shelter              =   4,
+
+    /* a bicycle can be parked */
+    sa_bikeshed             =   8,
+
+    /* a bicycle may be rented */
+    sa_bicyclerent          =  16,
+
+    /* a car can be parked */
+    sa_parking              =  32
 } stop_attribute_t;
 
-typedef enum routestop_attribute {
-    rsa_waitingpoint =   1, // at this stop the vehicle waits if its early
-    rsa_boarding     =   2, // a passenger can enter the vehicle at this stop
-    rsa_alighting    =   4  // a passenger can leave the vehicle at this stop
-} routestop_attribute_t;
+typedef enum journey_pattern_point_attribute {
+    /* the vehicle waits if it arrives early */
+    rsa_waitingpoint =   1,
 
-// treat entirely as read-only?
+    /* a passenger can enter the vehicle at this stop */
+    rsa_boarding     =   2,
+
+    /* a passenger can leave the vehicle at this stop */
+    rsa_alighting    =   4
+} journey_pattern_point_attribute_t;
+
 typedef struct tdata tdata_t;
 struct tdata {
     void *base;
     size_t size;
-    // required data
-    uint64_t calendar_start_time; // midnight of the first day in the 32-day calendar in seconds since the epoch, DST ignorant
+    /* Midnight of the first day in the 32-day calendar in seconds
+     * since the epoch, ignores Daylight Saving Time (DST).
+     */
+    uint64_t calendar_start_time;
+
+    /* Dates within the active calendar which have DST. */
     calendar_t dst_active;
-    uint32_t n_stops;
-    uint32_t n_routes;
-    uint32_t n_trips;
-    uint32_t n_agencies;
-    stop_t *stops;
-    uint8_t *stop_attributes;
-    route_t *routes;
-    uint32_t *route_stops;
-    uint8_t  *route_stop_attributes;
+    uint32_t n_stop_points;
+    uint32_t n_stop_areas;
+    uint32_t n_stop_point_attributes;
+    uint32_t n_stop_point_coords;
+    uint32_t n_stop_area_coords;
+    uint32_t n_stop_area_for_stop_point;
+    uint32_t n_journey_patterns;
+    uint32_t n_journey_pattern_points;
+    uint32_t n_journey_pattern_point_attributes;
+    uint32_t n_journey_pattern_point_headsigns;
+    uint32_t n_stop_times;
+    uint32_t n_vjs;
+    uint32_t n_journey_patterns_at_stop;
+    uint32_t n_transfer_target_stops;
+    uint32_t n_transfer_durations;
+    uint32_t n_vj_active;
+    uint32_t n_journey_pattern_active;
+    uint32_t n_platformcodes;
+    uint32_t n_stop_point_names;
+    uint32_t n_stop_point_nameidx;
+    uint32_t n_stop_area_nameidx;
+    uint32_t n_operator_ids;
+    uint32_t n_operator_names;
+    uint32_t n_operator_urls;
+    uint32_t n_commercial_mode_ids;
+    uint32_t n_commercial_mode_names;
+    uint32_t n_physical_mode_ids;
+    uint32_t n_physical_mode_names;
+    uint32_t n_string_pool;
+    uint32_t n_line_codes;
+    uint32_t n_line_names;
+    uint32_t n_line_ids;
+    uint32_t n_stop_point_ids;
+    uint32_t n_stop_area_ids;
+    uint32_t n_vj_ids;
+    uint32_t n_line_for_route;
+    uint32_t n_operator_for_line;
+    uint32_t n_commercial_mode_for_jp;
+    uint32_t n_physical_mode_for_line;
+    uint32_t n_vehicle_journey_transfers_backward;
+    uint32_t n_vehicle_journey_transfers_forward;
+    uint32_t n_stop_point_waittime;
+    stop_point_t *stop_points;
+    uint8_t *stop_point_attributes;
+    journey_pattern_t *journey_patterns;
+    spidx_t *journey_pattern_points;
+    uint8_t  *journey_pattern_point_attributes;
     stoptime_t *stop_times;
-    trip_t *trips;
-    uint32_t *stop_routes;
-    uint32_t *transfer_target_stops;
-    uint8_t  *transfer_dist_meters;
-    // optional data -- NULL pointer means it is not available
-    latlon_t *stop_coords;
-    uint32_t platformcode_width;
-    char *platformcodes;
-    char *stop_names;
-    uint32_t *stop_nameidx;
-    uint32_t agency_id_width;
-    char *agency_ids;
-    uint32_t agency_name_width;
-    char *agency_names;
-    uint32_t agency_url_width;
-    char *agency_urls;
-    char *headsigns;
-    uint32_t route_shortname_width;
-    char *route_shortnames;
-    uint32_t productcategory_width;
-    char *productcategories;
-    calendar_t *trip_active;
-    calendar_t *route_active;
-    uint8_t *trip_attributes;
-    uint32_t route_id_width;
-    char *route_ids;
-    uint32_t stop_id_width;
-    char *stop_ids;
-    uint32_t trip_id_width;
-    char *trip_ids;
+    vehicle_journey_t *vjs;
+    jpidx_t *journey_patterns_at_stop;
+    spidx_t *transfer_target_stops;
+    rtime_t  *transfer_durations;
+    rtime_t  *stop_point_waittime;
+    rtime_t max_time;
+    /* optional data:
+     * NULL pointer means it is not available */
+    latlon_t *stop_point_coords;
+    latlon_t *stop_area_coords;
+    spidx_t *stop_area_for_stop_point;
+    uint32_t *platformcodes;
+    uint32_t *stop_point_nameidx;
+    uint32_t *stop_area_nameidx;
+    uint32_t *operator_ids;
+    uint32_t *operator_names;
+    uint32_t *operator_urls;
+    uint32_t *commercial_mode_ids;
+    uint32_t *commercial_mode_names;
+    uint32_t *physical_mode_ids;
+    uint32_t *physical_mode_names;
+    uint16_t *commercial_mode_for_jp;
+    uint16_t *physical_mode_for_line;
+    uint16_t *line_for_route;
+    uint8_t *operator_for_line;
+    vehicle_journey_ref_t *vehicle_journey_transfers_backward;
+    vehicle_journey_ref_t *vehicle_journey_transfers_forward;
+    char *string_pool;
+    uint32_t *line_codes;
+    uint32_t *line_names;
+    calendar_t *vj_active;
+    calendar_t *journey_pattern_active;
+    uint32_t *journey_pattern_point_headsigns;
+    uint32_t line_ids_width;
+    char *line_ids;
+    uint32_t stop_point_ids_width;
+    char *stop_point_ids;
+    uint32_t stop_area_ids_width;
+    char *stop_area_ids;
+    uint32_t vj_ids_width;
+    char *vj_ids;
+    #ifdef RRRR_FEATURE_REALTIME
+    radixtree_t *lineid_index;
+    radixtree_t *stop_point_id_index;
+    radixtree_t *vjid_index;
+    #ifdef RRRR_FEATURE_REALTIME_EXPANDED
+    stoptime_t **vj_stoptimes;
+    uint32_t *vjs_in_journey_pattern;
+    list_t **rt_journey_patterns_at_stop_point;
+    calendar_t *vj_active_orig;
+    calendar_t *journey_pattern_active_orig;
+    #endif
+    #ifdef RRRR_FEATURE_REALTIME_ALERTS
     TransitRealtime__FeedMessage *alerts;
+    #endif
+    #endif
 };
 
-void tdata_load(char* filename, tdata_t*);
+bool tdata_load(tdata_t *td, char *filename);
 
-void tdata_close(tdata_t*);
+void tdata_close(tdata_t *td);
 
-void tdata_dump(tdata_t*);
+#ifdef RRRR_DEBUG
+void tdata_dump(tdata_t *td);
+#endif
 
-uint32_t *tdata_stops_for_route(tdata_t *, uint32_t route);
+spidx_t *tdata_points_for_journey_pattern(tdata_t *td, jpidx_t jp_index);
 
-uint8_t *tdata_stop_attributes_for_route(tdata_t *, uint32_t route);
+uint8_t *tdata_stop_point_attributes_for_journey_pattern(tdata_t *td, jpidx_t jp_index);
 
 /* TODO: return number of items and store pointer to beginning, to allow restricted pointers */
-uint32_t tdata_routes_for_stop(tdata_t*, uint32_t stop, uint32_t **routes_ret);
+uint32_t tdata_journey_patterns_for_stop_point(tdata_t *td, spidx_t sp_index, jpidx_t **jp_ret);
 
-stoptime_t *tdata_stoptimes_for_route(tdata_t*, uint32_t route_index);
+stoptime_t *tdata_stoptimes_for_journey_pattern(tdata_t *td, jpidx_t jp_index);
 
-void tdata_dump_route(tdata_t*, uint32_t route_index, uint32_t trip_index);
+#ifdef RRRR_DEBUG
+void tdata_dump_journey_pattern(tdata_t *td, jpidx_t jp_index, uint32_t vj_index);
+#endif
 
-char *tdata_route_id_for_index(tdata_t*, uint32_t route_index);
+const char *tdata_line_id_for_journey_pattern(tdata_t *td, jpidx_t jp_index);
 
-char *tdata_stop_id_for_index(tdata_t*, uint32_t stop_index);
+const char *tdata_stop_point_id_for_index(tdata_t *td, spidx_t sp_index);
 
-uint8_t *tdata_stop_attributes_for_index(tdata_t*, uint32_t stop_index);
+uint8_t *tdata_stop_point_attributes_for_index(tdata_t *td, spidx_t sp_index);
 
-char *tdata_trip_id_for_index(tdata_t*, uint32_t trip_index);
+const char *tdata_vehicle_journey_id_for_index(tdata_t *td, uint32_t vj_index);
 
-char *tdata_trip_id_for_route_trip_index(tdata_t *td, uint32_t route_index, uint32_t trip_index);
+const char *tdata_vehicle_journey_id_for_jp_vj_index(tdata_t *td, jpidx_t jp_index, uint32_t vj_index);
 
-uint32_t tdata_agencyidx_by_agency_name(tdata_t*, char* agency_name, uint32_t start_index);
+uint32_t tdata_operatoridx_by_operator_name(tdata_t *td, char *operator_name, uint32_t start_index);
 
-char *tdata_agency_id_for_index(tdata_t *td, uint32_t agency_index);
+const char *tdata_operator_id_for_index(tdata_t *td, uint32_t operator_index);
 
-char *tdata_agency_name_for_index(tdata_t *td, uint32_t agency_index);
+const char *tdata_operator_name_for_index(tdata_t *td, uint32_t operator_index);
 
-char *tdata_agency_url_for_index(tdata_t *td, uint32_t agency_index);
+const char *tdata_operator_url_for_index(tdata_t *td, uint32_t operator_index);
 
-char *tdata_headsign_for_offset(tdata_t *td, uint32_t headsign_offset);
+const char *tdata_line_code_for_index(tdata_t *td, uint32_t line_code_index);
 
-char *tdata_route_shortname_for_index(tdata_t *td, uint32_t route_shortname_index);
+const char *tdata_line_name_for_index(tdata_t *td, uint32_t line_name_index);
 
-char *tdata_productcategory_for_index(tdata_t *td, uint32_t productcategory_index);
+const char *tdata_name_for_commercial_mode_index(tdata_t *td, uint32_t commercial_mode_index);
 
-char *tdata_stop_name_for_index(tdata_t*, uint32_t stop_index);
+const char *tdata_id_for_commercial_mode_index(tdata_t *td, uint32_t commercial_mode_index);
 
-char *tdata_platformcode_for_index(tdata_t*, uint32_t stop_index);
+const char *tdata_name_for_physical_mode_index(tdata_t *td, uint32_t physical_mode_index);
 
-uint32_t tdata_stopidx_by_stop_name(tdata_t*, char* stop_name, uint32_t start_index);
+const char *tdata_id_for_physical_mode_index(tdata_t *td, uint32_t physical_mode_index);
 
-uint32_t tdata_stopidx_by_stop_id(tdata_t*, char* stop_id, uint32_t start_index);
+const char *tdata_stop_point_name_for_index(tdata_t *td, spidx_t sp_index);
 
-uint32_t tdata_routeidx_by_route_id(tdata_t*, char* route_id, uint32_t start_index);
+const char *tdata_stop_point_name_for_index(tdata_t *td, spidx_t sp_index);
 
-char *tdata_trip_ids_for_route(tdata_t*, uint32_t route_index);
+const char *tdata_stop_area_name_for_index(tdata_t *td, spidx_t sp_index);
 
-uint8_t *tdata_trip_attributes_for_route(tdata_t*, uint32_t route_index);
+const char *tdata_platformcode_for_index(tdata_t *td, spidx_t sp_index);
 
-calendar_t *tdata_trip_masks_for_route(tdata_t*, uint32_t route_index);
+spidx_t tdata_stop_pointidx_by_stop_point_name(tdata_t *td, char *stop_point_name, spidx_t sp_index_offset);
 
-char *tdata_headsign_for_route(tdata_t*, uint32_t route_index);
+spidx_t tdata_stop_pointidx_by_stop_area_name(tdata_t *td, char *stop_point_name, spidx_t sp_index_offset);
 
-char *tdata_shortname_for_route(tdata_t*, uint32_t route_index);
+spidx_t tdata_stop_pointidx_by_stop_point_id(tdata_t *td, char *stop_point_id, spidx_t sp_index_offset);
 
-char *tdata_productcategory_for_route(tdata_t*, uint32_t route_index);
+jpidx_t tdata_journey_pattern_idx_by_line_id(tdata_t *td, char *line_id, jpidx_t start_index);
 
-char *tdata_agency_id_for_route(tdata_t*, uint32_t route_index);
+const char *tdata_vehicle_journey_ids_in_journey_pattern(tdata_t *td, jpidx_t jp_index);
 
-char *tdata_agency_name_for_route(tdata_t*, uint32_t route_index);
+calendar_t *tdata_vj_masks_for_journey_pattern(tdata_t *td, jpidx_t jp_index);
 
-char *tdata_agency_url_for_route(tdata_t*, uint32_t route_index);
+const char *tdata_headsign_for_journey_pattern(tdata_t *td, jpidx_t jp_index);
 
-/* Returns a pointer to the first stoptime for the trip (VehicleJourney). These are generally TimeDemandTypes that must
+const char *tdata_headsign_for_journey_pattern_point(tdata_t *td, jpidx_t jp_index,jppidx_t jpp_offset);
+
+const char *tdata_line_code_for_journey_pattern(tdata_t *td, jpidx_t jp_index);
+
+const char *tdata_line_name_for_journey_pattern(tdata_t *td, jpidx_t jp_index);
+
+const char *tdata_commercial_mode_name_for_journey_pattern(tdata_t *td, jpidx_t jp_index);
+
+const char *tdata_commercial_mode_id_for_journey_pattern(tdata_t *td, jpidx_t jp_index);
+
+const char *tdata_physical_mode_name_for_journey_pattern(tdata_t *td, jpidx_t jp_index);
+
+const char *tdata_physical_mode_id_for_journey_pattern(tdata_t *td, jpidx_t jp_index);
+
+const char *tdata_operator_id_for_journey_pattern(tdata_t *td, jpidx_t jp_index);
+
+const char *tdata_operator_name_for_journey_pattern(tdata_t *td, jpidx_t jp_index);
+
+const char *tdata_operator_url_for_journey_pattern(tdata_t *td, jpidx_t jp_index);
+
+/* Returns a pointer to the first stoptime for the VehicleJourney. These are generally TimeDemandTypes that must
    be shifted in time to get the true scheduled arrival and departure times. */
-stoptime_t *tdata_timedemand_type(tdata_t*, uint32_t route_index, uint32_t trip_index);
+stoptime_t *tdata_timedemand_type(tdata_t *td, jpidx_t jp_index, jp_vjoffset_t vj_index);
 
-/* Get a pointer to the array of trip structs for this route. */
-trip_t *tdata_trips_for_route(tdata_t *td, uint32_t route_index);
+/* Get a pointer to the array of vehicle_journeys for this journey_pattern. */
+vehicle_journey_t *tdata_vehicle_journeys_in_journey_pattern(tdata_t *td, jpidx_t jp_index);
 
-void tdata_apply_gtfsrt (tdata_t *tdata, RadixTree *tripid_index, uint8_t *buf, size_t len);
+/* Get the minimum waittime a passenger has to wait before transferring to another vehicle */
+rtime_t tdata_stop_point_waittime (tdata_t *tdata, spidx_t sp_index);
+rtime_t transfer_duration (tdata_t *tdata, router_request_t *req, spidx_t sp_index_from, spidx_t sp_index_to);
 
-void tdata_apply_gtfsrt_file (tdata_t *tdata, RadixTree *tripid_index, char *filename);
+const char *tdata_stop_point_name_for_index(tdata_t *td, spidx_t sp_index);
 
-void tdata_clear_gtfsrt (tdata_t *tdata);
+#ifdef RRRR_FEATURE_LATLON
+bool hashgrid_setup (hashgrid_t *hg, tdata_t *tdata);
+#endif
 
-void tdata_apply_gtfsrt_alerts (tdata_t *tdata, RadixTree *routeid_index, RadixTree *stopid_index, RadixTree *tripid_index, uint8_t *buf, size_t len);
+bool strtospidx (const char *str, tdata_t *td, spidx_t *sp);
 
-void tdata_apply_gtfsrt_alerts_file (tdata_t *tdata, RadixTree *routeid_index, RadixTree *stopid_index, RadixTree *tripid_index, char *filename);
-
-void tdata_clear_gtfsrt_alerts (tdata_t *tdata);
-
-/* The signed delay of the specified trip in seconds. */
-float tdata_delay_min (tdata_t *td, uint32_t route_index, uint32_t trip_index);
-
-#endif // _TDATA_H
-
+#endif /* _TDATA_H */
