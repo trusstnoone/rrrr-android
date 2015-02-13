@@ -9,6 +9,10 @@
 #include "geometry.h"
 #include "rrrr_types.h"
 
+#ifdef RRRR_FEATURE_LATLON
+#include "hashgrid.h"
+#endif
+
 #ifdef RRRR_FEATURE_REALTIME
 #include "gtfs-realtime.pb-c.h"
 #include "radixtree.h"
@@ -111,6 +115,7 @@ struct tdata {
 
     /* Dates within the active calendar which have DST. */
     calendar_t dst_active;
+    uint32_t n_days;
     uint32_t n_stop_points;
     uint32_t n_stop_areas;
     uint32_t n_stop_point_attributes;
@@ -192,18 +197,15 @@ struct tdata {
     calendar_t *vj_active;
     calendar_t *journey_pattern_active;
     uint32_t *journey_pattern_point_headsigns;
-    uint32_t line_ids_width;
-    char *line_ids;
-    uint32_t stop_point_ids_width;
-    char *stop_point_ids;
-    uint32_t stop_area_ids_width;
-    char *stop_area_ids;
-    uint32_t vj_ids_width;
-    char *vj_ids;
+    uint32_t *line_ids;
+    uint32_t *stop_point_ids;
+    uint32_t *stop_area_ids;
+    uint32_t *vj_ids;
     #ifdef RRRR_FEATURE_REALTIME
     radixtree_t *lineid_index;
     radixtree_t *stop_point_id_index;
     radixtree_t *vjid_index;
+    radixtree_t *stringpool_index;
     #ifdef RRRR_FEATURE_REALTIME_EXPANDED
     stoptime_t **vj_stoptimes;
     uint32_t *vjs_in_journey_pattern;
@@ -214,6 +216,10 @@ struct tdata {
     #ifdef RRRR_FEATURE_REALTIME_ALERTS
     TransitRealtime__FeedMessage *alerts;
     #endif
+    #endif
+    #ifdef RRRR_FEATURE_LATLON
+    /* The latlon lookup for each stop_point */
+    hashgrid_t hg;
     #endif
 };
 
@@ -228,6 +234,10 @@ void tdata_dump(tdata_t *td);
 spidx_t *tdata_points_for_journey_pattern(tdata_t *td, jpidx_t jp_index);
 
 uint8_t *tdata_stop_point_attributes_for_journey_pattern(tdata_t *td, jpidx_t jp_index);
+
+spidx_t tdata_stop_areaidx_for_index(tdata_t *td, spidx_t sp_index);
+
+spidx_t tdata_stop_areaidx_by_stop_area_name(tdata_t *td, char *stop_point_name, spidx_t sa_index_offset);
 
 /* TODO: return number of items and store pointer to beginning, to allow restricted pointers */
 uint32_t tdata_journey_patterns_for_stop_point(tdata_t *td, spidx_t sp_index, jpidx_t **jp_ret);
@@ -260,6 +270,8 @@ const char *tdata_line_code_for_index(tdata_t *td, uint32_t line_code_index);
 
 const char *tdata_line_name_for_index(tdata_t *td, uint32_t line_name_index);
 
+const char *tdata_line_id_for_index(tdata_t *td, uint32_t line_name_index);
+
 const char *tdata_name_for_commercial_mode_index(tdata_t *td, uint32_t commercial_mode_index);
 
 const char *tdata_id_for_commercial_mode_index(tdata_t *td, uint32_t commercial_mode_index);
@@ -283,8 +295,6 @@ spidx_t tdata_stop_pointidx_by_stop_area_name(tdata_t *td, char *stop_point_name
 spidx_t tdata_stop_pointidx_by_stop_point_id(tdata_t *td, char *stop_point_id, spidx_t sp_index_offset);
 
 jpidx_t tdata_journey_pattern_idx_by_line_id(tdata_t *td, char *line_id, jpidx_t start_index);
-
-const char *tdata_vehicle_journey_ids_in_journey_pattern(tdata_t *td, jpidx_t jp_index);
 
 calendar_t *tdata_vj_masks_for_journey_pattern(tdata_t *td, jpidx_t jp_index);
 
@@ -324,9 +334,19 @@ rtime_t transfer_duration (tdata_t *tdata, router_request_t *req, spidx_t sp_ind
 const char *tdata_stop_point_name_for_index(tdata_t *td, spidx_t sp_index);
 
 #ifdef RRRR_FEATURE_LATLON
-bool hashgrid_setup (hashgrid_t *hg, tdata_t *tdata);
+bool tdata_hashgrid_setup (tdata_t *tdata);
 #endif
 
-bool strtospidx (const char *str, tdata_t *td, spidx_t *sp);
+bool strtospidx (const char *str, tdata_t *td, spidx_t *sp, char **endptr);
+bool strtojpidx (const char *str, tdata_t *td, jpidx_t *jp, char **endptr);
+bool strtovjoffset (const char *str, tdata_t *td, jpidx_t jp_index, jp_vjoffset_t *vj_o, char **endptr);
+
+#ifdef RRRR_FEATURE_REALTIME
+bool tdata_realtime_setup (tdata_t *tdata);
+#endif
+
+void tdata_validity (tdata_t *tdata, uint64_t *min, uint64_t *max);
+void tdata_extends (tdata_t *tdata, latlon_t *ll, latlon_t *ur);
+void tdata_modes (tdata_t *tdata, tmode_t *m);
 
 #endif /* _TDATA_H */

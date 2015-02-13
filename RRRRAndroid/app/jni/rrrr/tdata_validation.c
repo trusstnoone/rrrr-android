@@ -13,7 +13,7 @@
  */
 int tdata_validation_boarding_alighting(tdata_t *tdata) {
     int32_t ret_invalid = 0;
-    uint32_t i_jp = tdata->n_journey_patterns;
+    jpidx_t i_jp = (jpidx_t) tdata->n_journey_patterns;
 
     do {
         journey_pattern_t *jp;
@@ -125,9 +125,9 @@ int tdata_validation_increasing_times(tdata_t *tdata) {
 
                 if (prev_st != NULL) {
                     if (st->arrival < prev_st->departure) {
-                        char *vj_id = "";
+                        char const *vj_id = "";
                         if (tdata->vj_ids) {
-                            vj_id = tdata->vj_ids + (vj_index * tdata->vj_ids_width);
+                            vj_id = tdata_vehicle_journey_id_for_index(tdata,vj_index);
                         }
 
                         fprintf (stderr, "negative travel time arriving at "
@@ -247,6 +247,7 @@ bool tdata_validation_check_coherent (tdata_t *tdata) {
 
     return  (tdata_validation_check_nstop_points(tdata) &&
              tdata->n_journey_patterns > 0 &&
+             tdata->n_journey_patterns < ((jpidx_t) -1) &&
              tdata_validation_boarding_alighting(tdata) == 0 &&
              tdata_validation_coordinates(tdata) == 0 &&
              tdata_validation_increasing_times(tdata) == 0 &&

@@ -22,24 +22,30 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         r4 = new R4();
+        new Thread() {
+            public void run() {
+                r4.nativePipeSTDERRToLogcat();
+            }
+        }.start();
         copyTimetable();
         testR4();
     }
 
     public void testR4()
     {
-        r4.initWithFile( new ContextWrapper(this).getFilesDir().getAbsolutePath()
-                 + File.separator + "timetable.dat");
-
         Random r = new Random();
         int success = 0;
 
-        for(int i =0; i < 100; i++) {
+        boolean result =  r4.initWithFile( new ContextWrapper(this).getFilesDir().getAbsolutePath()
+                + File.separator + "timetable.dat");
+
+        for(int i =1; i < 500; i++) {
             int fromIdx = i;
-            int toIdx = 100 - i;
+            int toIdx = 500 - i;
 
             Log.e("router","from " +String.valueOf(fromIdx));
             Log.e("router", "to" + String.valueOf(toIdx));
+
 
             String planRoute = r4.planRoute(fromIdx, toIdx, false, java.util.Calendar.getInstance().getTime().getTime());
             ArrayList<Advice> advices = Advice.parseAdvice(planRoute);
@@ -58,6 +64,7 @@ public class MainActivity extends Activity {
     public void copyTimetable()
     {
         Utils.copyFile("timetable.dat",this);
+        Utils.copyFile("timetable4.dat",this);
     }
 
     @Override
