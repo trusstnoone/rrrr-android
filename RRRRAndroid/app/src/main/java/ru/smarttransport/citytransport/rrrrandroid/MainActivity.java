@@ -33,31 +33,51 @@ public class MainActivity extends Activity {
 
     public void testR4()
     {
-        Random r = new Random();
-        int success = 0;
+        try {
+            Random r = new Random();
+            int success = 0;
 
-        boolean result =  r4.initWithFile( new ContextWrapper(this).getFilesDir().getAbsolutePath()
-                + File.separator + "timetable.dat");
+            boolean result = r4.initWithFile(new ContextWrapper(this).getFilesDir().getAbsolutePath()
+                    + File.separator + "timetable4.dat");
 
-        for(int i =1; i < 500; i++) {
-            int fromIdx = i;
-            int toIdx = 500 - i;
+                int fromIdx = 84;
+                int toIdx = 90;
 
-            Log.e("router","from " +String.valueOf(fromIdx));
-            Log.e("router", "to" + String.valueOf(toIdx));
+                Log.e("router", "from " + String.valueOf(fromIdx));
+                Log.e("router", "to" + String.valueOf(toIdx));
 
 
-            String planRoute = r4.planRoute(fromIdx, toIdx, false, java.util.Calendar.getInstance().getTime().getTime());
-            ArrayList<Advice> advices = Advice.parseAdvice(planRoute);
+                String planRoute = r4.planRoute(fromIdx, toIdx, false, java.util.Calendar.getInstance().getTime().getTime());
+                ArrayList<Advice> advices = Advice.parseAdvice(planRoute);
 
-            if(advices.size() > 0 )
-                success++;
+                if (advices.size() > 0)
+                    success++;
 
-            Log.e("router", " plan :"+planRoute);
+                Log.e("router", " plan :" + planRoute);
+
+
+//            for (int i = 1; i < 500; i++) {
+//                int fromIdx = i;
+//                int toIdx = 500 - i;
+//
+//                Log.e("router", "from " + String.valueOf(fromIdx));
+//                Log.e("router", "to" + String.valueOf(toIdx));
+//
+//
+//                String planRoute = r4.planRoute(fromIdx, toIdx, false, java.util.Calendar.getInstance().getTime().getTime());
+//                ArrayList<Advice> advices = Advice.parseAdvice(planRoute);
+//
+//                if (advices.size() > 0)
+//                    success++;
+//
+//                Log.e("router", " plan :" + planRoute);
+//            }
+
+            Log.e("router", "count find routes" + String.valueOf(success));
+        }catch (Exception ex)
+        {
+
         }
-
-        Log.e("router", "count find routes"+String.valueOf(success));
-
 
     }
 

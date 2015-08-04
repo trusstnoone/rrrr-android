@@ -1,10 +1,13 @@
-#include "config.h"
-#include "radixtree.h"
-#include "rrrr_types.h"
+/* Copyright 2013-2015 Bliksem Labs B.V.
+ * See the LICENSE file at the top-level directory of this distribution and at
+ * https://github.com/bliksemlabs/rrrr/
+ */
+
+#include "string_pool.h"
 #include "string.h"
 
 uint32_t string_pool_append(char *pool, uint32_t *n_pool, radixtree_t *r, const char *str) {
-    uint32_t location = radixtree_find (r, str);
+    uint32_t location = radixtree_find_exact (r, str);
 
     if (location == RADIXTREE_NONE) {
         size_t n = strlen(str);

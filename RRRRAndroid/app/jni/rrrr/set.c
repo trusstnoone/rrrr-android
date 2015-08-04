@@ -1,3 +1,8 @@
+/* Copyright 2013-2015 Bliksem Labs B.V.
+ * See the LICENSE file at the top-level directory of this distribution and at
+ * https://github.com/bliksemlabs/rrrr/
+ */
+
 #include "config.h"
 #include "rrrr_types.h"
 #include "set.h"
@@ -29,10 +34,10 @@ bool set_in_sp (spidx_t *set, uint8_t length, spidx_t value) {
 }
 #endif
 
-#if RRRR_MAX_BANNED_VEHICLE_JOURNEYS > 0
+#if RRRR_MAX_BANNED_JOURNEY_PATTERNS > 0
 void set_add_jp (jpidx_t *set,
-                 uint8_t  *length, uint8_t max_length,
-                 jpidx_t value) {
+        uint8_t  *length, uint8_t max_length,
+        jpidx_t value) {
     uint8_t i;
 
     if (*length >= max_length) return;
@@ -44,7 +49,9 @@ void set_add_jp (jpidx_t *set,
     set[*length] = value;
     (*length)++;
 }
+#endif
 
+#if RRRR_MAX_BANNED_VEHICLE_JOURNEYS > 0
 void set_add_vj (jpidx_t *set1, jp_vjoffset_t *set2,
                  uint8_t  *length, uint8_t max_length,
                  jpidx_t value1, jp_vjoffset_t value2) {
@@ -75,4 +82,29 @@ bool set_in_vj (jpidx_t *set1, jp_vjoffset_t *set2, uint8_t length,
 }
 #endif
 
+#if RRRR_MAX_FILTERED_OPERATORS > 0 || RRRR_MAX_BANNED_OPERATORS > 0
+bool set_in_uint8 (uint8_t *set, uint8_t length, uint8_t value) {
+    uint8_t i = length;
 
+    while (i) {
+        i--;
+        if (set[i] == value) return true;
+    }
+    return false;
+}
+
+void set_add_uint8 (uint8_t *set,
+                    uint8_t *length, uint8_t max_length,
+                    uint8_t value) {
+    uint8_t i;
+
+    if (*length >= max_length) return;
+
+    for (i = 0; i < *length; ++i) {
+        if (set[i] == value) return;
+    }
+
+    set[*length] = value;
+    (*length)++;
+}
+#endif

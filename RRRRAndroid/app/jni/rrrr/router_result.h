@@ -1,3 +1,8 @@
+/* Copyright 2013-2015 Bliksem Labs B.V.
+ * See the LICENSE file at the top-level directory of this distribution and at
+ * https://github.com/bliksemlabs/rrrr/
+ */
+
 #ifndef _ROUTER_RESULT_H
 #define _ROUTER_RESULT_H
 
@@ -5,12 +10,12 @@
 #include "util.h"
 #include "rrrr_types.h"
 #include "router.h"
-
+#define MAX_LEGS RRRR_DEFAULT_MAX_ROUNDS * 4 + 1
 /* A leg represents one ride or walking transfer. */
 typedef struct leg leg_t;
 struct leg {
     /* vj index */
-    uint32_t vj;
+    jp_vjoffset_t vj;
 
     /* journey_pattern index */
     jpidx_t journey_pattern;
@@ -26,6 +31,11 @@ struct leg {
 
     /* end time */
     rtime_t  t1;
+
+    #ifdef RRRR_FEATURE_REALTIME_EXPANDED
+    /* Serviceday of the vehicle_journey */
+    calendar_t  cal_day;
+    #endif
 
     #ifdef RRRR_FEATURE_REALTIME
     /* start journey_pattern_point index */
@@ -46,7 +56,7 @@ struct leg {
 /* An itinerary is a chain of legs leading from one place to another. */
 typedef struct itinerary itinerary_t;
 struct itinerary {
-    leg_t legs[RRRR_DEFAULT_MAX_ROUNDS * 2 + 1];
+    leg_t legs[MAX_LEGS];
     uint8_t n_rides;
     uint8_t n_legs;
 };
@@ -85,6 +95,8 @@ struct result {
 bool router_result_to_plan (plan_t *plan, router_t *router, router_request_t *req);
 
 void router_result_sort (plan_t *plan);
+
+void router_result_init_plan(plan_t *plan);
 
 /* return num of chars written */
 uint32_t router_result_dump(router_t *router, router_request_t *req,

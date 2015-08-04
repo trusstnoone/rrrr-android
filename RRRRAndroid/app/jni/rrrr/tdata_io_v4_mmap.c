@@ -1,18 +1,12 @@
-/* Copyright 2013 Bliksem Labs.
+/* Copyright 2013-2015 Bliksem Labs B.V.
  * See the LICENSE file at the top-level directory of this distribution and at
  * https://github.com/bliksemlabs/rrrr/
  */
 
-#include "config.h"
-
 #ifdef RRRR_TDATA_IO_MMAP
 
-#include "tdata_io_v3.h"
-#include "tdata.h"
-#include "rrrr_types.h"
-
+#include "tdata_io_v4.h"
 #include <stdio.h>
-#include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -35,7 +29,7 @@ void set_max_time(tdata_t *td){
 }
 
 /* Map an input file into memory and reconstruct pointers to its contents. */
-bool tdata_io_v3_load(tdata_t *td, char *filename) {
+bool tdata_io_v4_load(tdata_t *td, char *filename) {
     struct stat st;
     tdata_header_t *header;
     int fd;
@@ -64,9 +58,10 @@ bool tdata_io_v3_load(tdata_t *td, char *filename) {
         goto fail_munmap_base;
     }
 
+    td->timezone = header->timezone;
     td->calendar_start_time = header->calendar_start_time;
-    td->dst_active = header->dst_active;
-    td->n_days = 32;
+    td->utc_offset = header->utc_offset;
+    td->n_days = header->n_days;
     td->n_stop_areas = header->n_stop_areas;
 
     load_mmap (td->base, stop_points, stop_point_t);
@@ -93,7 +88,11 @@ bool tdata_io_v3_load(tdata_t *td, char *filename) {
     load_mmap (td->base, operator_for_line, uint8_t);
     load_mmap (td->base, commercial_mode_for_jp, uint16_t);
     load_mmap (td->base, physical_mode_for_line, uint16_t);
+    load_mmap (td->base, vehicle_journey_transfers_backward, vehicle_journey_ref_t);
+    load_mmap (td->base, vehicle_journey_transfers_forward, vehicle_journey_ref_t);
     load_mmap (td->base, line_codes, uint32_t);
+    load_mmap (td->base, line_colors, uint32_t);
+    load_mmap (td->base, line_colors_text, uint32_t);
     load_mmap (td->base, line_names, uint32_t);
     load_mmap (td->base, operator_ids, uint32_t);
     load_mmap (td->base, operator_names, uint32_t);
@@ -106,7 +105,9 @@ bool tdata_io_v3_load(tdata_t *td, char *filename) {
     load_mmap (td->base, line_ids, uint32_t);
     load_mmap (td->base, stop_point_ids, uint32_t);
     load_mmap (td->base, stop_area_ids, uint32_t);
+    load_mmap (td->base, stop_area_timezones, uint32_t);
     load_mmap (td->base, vj_ids, uint32_t);
+    load_mmap (td->base, vj_time_offsets, int8_t);
 
     /* Set the maximum drivetime of any day in tdata */
     set_max_time(td);
@@ -127,10 +128,10 @@ fail_close_fd:
     return false;
 }
 
-void tdata_io_v3_close(tdata_t *td) {
+void tdata_io_v4_close(tdata_t *td) {
     munmap(td->base, td->size);
 }
 
 #else
-void tdata_io_v3_mmap_not_available();
+void tdata_io_v4_mmap_not_available();
 #endif /* RRRR_TDATA_IO_MMAP */

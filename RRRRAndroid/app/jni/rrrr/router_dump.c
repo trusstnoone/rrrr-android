@@ -1,9 +1,11 @@
+/* Copyright 2013-2015 Bliksem Labs B.V.
+ * See the LICENSE file at the top-level directory of this distribution and at
+ * https://github.com/bliksemlabs/rrrr/
+ */
+
 #include "config.h"
 #include "router_dump.h"
-#include "router.h"
 #include "util.h"
-#include "rrrr_types.h"
-#include "tdata.h"
 
 #include <stdio.h>
 
@@ -22,7 +24,7 @@ void router_state_dump (router_t *router, uint64_t i_state) {
                      );
 
     /* TODO */
-    if (router->states_back_journey_pattern[i_state] == NONE) fprintf (stderr, "NONE\n");
+    if (router->states_back_journey_pattern[i_state] == JP_NONE) fprintf (stderr, "NONE\n");
     else fprintf (stderr, "%d\n", router->states_back_journey_pattern[i_state]);
 }
 
@@ -33,7 +35,7 @@ void dump_results(router_t *router) {
     char id_fmt[10];
     sprintf(id_fmt, "%%%ds", router.tdata.stop_id_width);
     #else
-    char *id_fmt = "%30.30s";
+    #define id_fmt "%30.30s"
     #endif
 
     fprintf(stderr, "\nRouter states:\n");

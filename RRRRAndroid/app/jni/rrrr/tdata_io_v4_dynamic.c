@@ -1,4 +1,4 @@
-/* Copyright 2013 Bliksem Labs.
+/* Copyright 2013-2015 Bliksem Labs B.V.
  * See the LICENSE file at the top-level directory of this distribution and at
  * https://github.com/bliksemlabs/rrrr/
  */
@@ -7,7 +7,7 @@
 
 #ifdef RRRR_TDATA_IO_DYNAMIC
 
-#include "tdata_io_v3.h"
+#include "tdata_io_v4.h"
 #include "tdata.h"
 #include "rrrr_types.h"
 
@@ -26,7 +26,7 @@
     if (read (fd, td->storage, sizeof(type) * (td->n_##storage + 1)) != (ssize_t) (sizeof(type) * (td->n_##storage + 1))) goto fail_close_fd;
 
 /* Set the maximum drivetime of any day in tdata */
-void set_max_time(tdata_t *td){
+static void set_max_time(tdata_t *td){
     jpidx_t jp_index;
     td->max_time = 0;
     for (jp_index = 0; jp_index < td->n_journey_patterns; jp_index++){
@@ -36,7 +36,7 @@ void set_max_time(tdata_t *td){
     }
 }
 
-bool tdata_io_v3_load(tdata_t *td, char *filename) {
+bool tdata_io_v4_load(tdata_t *td, char *filename) {
     tdata_header_t h;
     tdata_header_t *header = &h;
 
@@ -64,7 +64,6 @@ bool tdata_io_v3_load(tdata_t *td, char *filename) {
             header->n_stop_point_attributes < ((spidx_t) -2) &&
             header->n_stop_point_coords < ((spidx_t) -2) &&
             header->n_stop_area_coords < ((spidx_t) -2) &&
-            header->n_stop_area_coords < ((spidx_t) -2) &&
             header->n_journey_patterns < ((jpidx_t) -1) &&
             header->n_journey_pattern_points < (UINT32_MAX) &&
             header->n_journey_pattern_point_attributes < (UINT32_MAX) &&
@@ -78,6 +77,7 @@ bool tdata_io_v3_load(tdata_t *td, char *filename) {
             header->n_journey_pattern_active < (UINT32_MAX) &&
             header->n_platformcodes < (UINT32_MAX) &&
             header->n_stop_point_nameidx < ((spidx_t) -2) &&
+            header->n_stop_area_nameidx < ((spidx_t) -2) &&
             header->n_operator_ids < (UINT8_MAX) &&
             header->n_operator_names < (UINT8_MAX) &&
             header->n_operator_urls < (UINT8_MAX) &&
@@ -89,25 +89,35 @@ bool tdata_io_v3_load(tdata_t *td, char *filename) {
             header->n_physical_mode_ids < (UINT16_MAX) &&
             header->n_physical_mode_names < (UINT16_MAX) &&
             header->n_physical_mode_for_line < (UINT16_MAX) &&
+            header->n_stop_point_waittime < ((rtime_t) -2) &&
+            header->n_vehicle_journey_transfers_backward < (UINT32_MAX) &&
+            header->n_vehicle_journey_transfers_forward < (UINT32_MAX) &&
             header->n_line_ids < (UINT32_MAX) &&
+            header->n_line_colors < (UINT32_MAX) &&
+            header->n_line_colors_text < (UINT32_MAX) &&
+            header->n_line_names < (UINT32_MAX) &&
             header->n_line_for_route < (UINT16_MAX) &&
+            header->n_operator_for_line < (UINT16_MAX) &&
             header->n_stop_point_ids < ((spidx_t) -2) &&
             header->n_stop_area_ids < ((spidx_t) -2) &&
-            header->n_vj_ids < (UINT32_MAX) ) ) {
+            header->n_vj_ids < (UINT32_MAX) ) &&
+            header->n_vj_time_offsets < (UINT32_MAX) ) {
 
         fprintf(stderr, "The input file %s does not appear to be a valid timetable.\n", filename);
         goto fail_close_fd;
     }
 
+    td->timezone = header->timezone;
     td->calendar_start_time = header->calendar_start_time;
-    td->dst_active = header->dst_active;
-    td->n_days = 32;
+    td->utc_offset = header->utc_offset;
+    td->n_days = header->n_days;
     td->n_stop_areas = header->n_stop_areas;
 
     load_dynamic (fd, stop_points, stop_point_t);
     load_dynamic (fd, stop_point_attributes, uint8_t);
     load_dynamic (fd, stop_point_coords, latlon_t);
     load_dynamic (fd, stop_area_coords, latlon_t);
+    load_dynamic (fd, stop_area_for_stop_point, spidx_t);
     load_dynamic (fd, journey_patterns, journey_pattern_t);
     load_dynamic (fd, journey_pattern_points, spidx_t);
     load_dynamic (fd, journey_pattern_point_attributes, uint8_t);
@@ -130,6 +140,8 @@ bool tdata_io_v3_load(tdata_t *td, char *filename) {
     load_dynamic (fd, commercial_mode_for_jp, uint16_t);
     load_dynamic (fd, physical_mode_for_line, uint16_t);
     load_dynamic (fd, line_codes, uint32_t);
+    load_dynamic (fd, line_colors, uint32_t);
+    load_dynamic (fd, line_colors_text, uint32_t);
     load_dynamic (fd, line_names, uint32_t);
     load_dynamic (fd, operator_ids, uint32_t);
     load_dynamic (fd, operator_names, uint32_t);
@@ -142,7 +154,9 @@ bool tdata_io_v3_load(tdata_t *td, char *filename) {
     load_dynamic (fd, line_ids, uint32_t);
     load_dynamic (fd, stop_point_ids, uint32_t);
     load_dynamic (fd, stop_area_ids, uint32_t);
+    load_dynamic (fd, stop_area_timezones, uint32_t);
     load_dynamic (fd, vj_ids, uint32_t);
+    load_dynamic (fd, vj_time_offsets, int8_t);
 
     set_max_time(td);
     close (fd);
@@ -155,7 +169,7 @@ fail_close_fd:
     return false;
 }
 
-void tdata_io_v3_close(tdata_t *td) {
+void tdata_io_v4_close(tdata_t *td) {
     free (td->stop_points);
     free (td->stop_point_attributes);
     free (td->stop_point_coords);
@@ -185,11 +199,16 @@ void tdata_io_v3_close(tdata_t *td) {
     free (td->platformcodes);
     free (td->stop_point_ids);
     free (td->stop_area_ids);
+    free (td->stop_area_timezones);
+    free (td->stop_area_for_stop_point);
     free (td->vj_ids);
+    free (td->vj_time_offsets);
     free (td->operator_ids);
     free (td->operator_names);
     free (td->operator_urls);
     free (td->line_codes);
+    free (td->line_colors);
+    free (td->line_colors_text);
     free (td->line_names);
     free (td->line_ids);
     free (td->commercial_mode_ids);
@@ -199,5 +218,5 @@ void tdata_io_v3_close(tdata_t *td) {
 }
 
 #else
-void tdata_io_v3_dynamic_not_available();
+void tdata_io_v4_dynamic_not_available();
 #endif /* RRRR_TDATA_IO_DYNAMIC */

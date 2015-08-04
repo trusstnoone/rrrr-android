@@ -77,8 +77,8 @@ public class Advice implements Serializable
             {
                 JSONObject trip = itineraries.getJSONObject(i);
                 Advice newAdvice = new Advice();
-                newAdvice.setFromStopId(Integer.parseInt(fromObject.getJSONObject("stopId").getString("id")));
-                newAdvice.setToStopId(Integer.parseInt(toObject.getJSONObject("stopId").getString("id")));
+                newAdvice.setFromStopId(Integer.parseInt(fromObject.getJSONObject("stopId").getString("id").split(":")[2]));
+                newAdvice.setToStopId(Integer.parseInt(toObject.getJSONObject("stopId").getString("id").split(":")[2]));
                 newAdvice.setTransfers(trip.getInt("transfers"));
                 newAdvice.setWalkTime(trip.getInt("walkTime"));
                 newAdvice.setTransitTime(trip.getInt("transitTime"));

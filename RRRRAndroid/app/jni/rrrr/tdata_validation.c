@@ -1,11 +1,10 @@
-/* Copyright 2013 Bliksem Labs.
+/* Copyright 2013-2015 Bliksem Labs B.V.
  * See the LICENSE file at the top-level directory of this distribution and at
  * https://github.com/bliksemlabs/rrrr/
  */
 
+/* tdata_validation.c : a set of validation tools to check whether a timetable is correct for RRRR*/
 #include "tdata_validation.h"
-#include "tdata.h"
-
 #include <stdio.h>
 
 /* Validate that the first journey_pattern_point have won't alighting set and
@@ -93,7 +92,7 @@ int tdata_validation_increasing_times(tdata_t *tdata) {
     int ret_nonincreasing = 0;
     for (jp_index = 0; jp_index < tdata->n_journey_patterns; ++jp_index) {
         journey_pattern_t jp = tdata->journey_patterns[jp_index];
-        vehicle_journey_t *vjs = tdata->vjs + jp.vj_offset;
+        vehicle_journey_t *vjs = tdata->vjs + jp.vj_index;
 
         #ifdef RRRR_DEBUG
         /* statistics on errors, instead of early bail out */
@@ -175,6 +174,52 @@ int tdata_validation_increasing_times(tdata_t *tdata) {
     return ret_nonincreasing;
 }
 
+/* Check that all interlines are symmetric.
+ */
+int tdata_validation_symmetric_interlines(tdata_t *tdata) {
+    bool is_valid = true;
+    uint32_t jp_index = 0;
+    /* Check forward */
+    for (; jp_index < tdata->n_journey_patterns; jp_index++) {
+        journey_pattern_t *jp = &tdata->journey_patterns[jp_index];
+        jp_vjoffset_t vj_offset = 0;
+        for (; vj_offset < jp->n_vjs; vj_offset++) {
+            vehicle_journey_ref_t *vj_interline = &tdata->vehicle_journey_transfers_forward[jp->vj_index+vj_offset];
+            if (vj_interline->jp_index != JP_NONE) {
+                journey_pattern_t *jp_next = &tdata->journey_patterns[vj_interline->jp_index];
+                vehicle_journey_ref_t *vj_interline_back = &tdata->vehicle_journey_transfers_backward[jp_next->vj_index+vj_interline->vj_offset];
+                if (vj_interline_back->jp_index != jp_index || vj_interline_back->vj_offset != vj_offset){
+                    is_valid = false;
+                    fprintf (stderr,"VJ transfer (clockwise) not symetric! %d,%d points to %d,%d but points back to %d,%d\n",
+                    jp_index,vj_offset,
+                            vj_interline->jp_index,vj_interline->vj_offset,
+                    vj_interline_back->jp_index,vj_interline_back->vj_offset);
+                }
+            }
+        }
+    }
+
+    for (; jp_index < tdata->n_journey_patterns; jp_index++) {
+        journey_pattern_t *jp = &tdata->journey_patterns[jp_index];
+        jp_vjoffset_t vj_offset = 0;
+        for (; vj_offset < jp->n_vjs; vj_offset++) {
+            vehicle_journey_ref_t *vj_interline = &tdata->vehicle_journey_transfers_backward[jp->vj_index+vj_offset];
+            if (vj_interline->jp_index != JP_NONE) {
+                journey_pattern_t *jp_next = &tdata->journey_patterns[vj_interline->jp_index];
+                vehicle_journey_ref_t *vj_interline_back = &tdata->vehicle_journey_transfers_forward[jp_next->vj_index+vj_interline->vj_offset];
+                if (vj_interline_back->jp_index != jp_index || vj_interline_back->vj_offset != vj_offset){
+                    is_valid = false;
+                    fprintf (stderr,"VJ transfer(counterclockwise) not symetric! %d,%d points to %d,%d but points back to %d,%d\n",
+                            jp_index,vj_offset,
+                            vj_interline->jp_index,vj_interline->vj_offset,
+                            vj_interline_back->jp_index,vj_interline_back->vj_offset);
+                }
+            }
+        }
+    }
+    return is_valid ? 0 : 1;
+}
+
 /* Check that all transfers are symmetric.
  */
 int tdata_validation_symmetric_transfers(tdata_t *tdata) {
@@ -223,8 +268,10 @@ int tdata_validation_symmetric_transfers(tdata_t *tdata) {
             }
         }
     }
+    #ifdef RRRR_DEBUG
     fprintf (stderr, "checked %d transfers for symmetry.\n",
                      n_transfers_checked);
+    #endif
 
     return 0;
 }
@@ -243,14 +290,18 @@ static bool tdata_validation_check_nstop_points(tdata_t *tdata) {
 }
 
 bool tdata_validation_check_coherent (tdata_t *tdata) {
+    #ifdef RRRR_DEBUG
     fprintf (stderr, "checking tdata coherency...\n");
+    #endif
 
     return  (tdata_validation_check_nstop_points(tdata) &&
              tdata->n_journey_patterns > 0 &&
+             tdata->n_vjs > 0 &&
              tdata->n_journey_patterns < ((jpidx_t) -1) &&
              tdata_validation_boarding_alighting(tdata) == 0 &&
              tdata_validation_coordinates(tdata) == 0 &&
              tdata_validation_increasing_times(tdata) == 0 &&
-             tdata_validation_symmetric_transfers(tdata) == 0);
+             tdata_validation_symmetric_transfers(tdata) == 0 &&
+             tdata_validation_symmetric_interlines(tdata) == 0);
 }
 

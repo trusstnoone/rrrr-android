@@ -1,15 +1,14 @@
-/* Copyright 2013 Bliksem Labs.
+/* Copyright 2013-2015 Bliksem Labs B.V.
  * See the LICENSE file at the top-level directory of this distribution and at
  * https://github.com/bliksemlabs/rrrr/
  */
 
-/* tdata.c : handles memory mapped data file containing transit timetable etc. */
+/* tdata.c : handles data-structures containing transit timetable etc. */
 
 /* top, make sure it works alone */
 #include "tdata.h"
-#include "tdata_io_v3.h"
+#include "tdata_io_v4.h"
 #include "tdata_validation.h"
-#include "rrrr_types.h"
 #include "util.h"
 
 #ifdef RRRR_FEATURE_REALTIME_ALERTS
@@ -18,25 +17,15 @@
 #ifdef RRRR_FEATURE_REALTIME_EXPANDED
 #include "tdata_realtime_expanded.h"
 #endif
-
-#include <fcntl.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <string.h>
-#include <strings.h>
 #include <stdlib.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <stdbool.h>
 
-#include "config.h"
-#include "bitset.h"
+const char *tdata_timezone(tdata_t *td){
+    return td->string_pool + td->timezone;
+}
 
 const char *tdata_line_id_for_journey_pattern(tdata_t *td, jpidx_t jp_index) {
-    uint16_t route_index;
-    if (jp_index == NONE) return "NONE";
+    routeidx_t route_index;
+    if (jp_index == JP_NONE) return "NONE";
     route_index = td->journey_patterns[jp_index].route_index;
     return tdata_line_id_for_index(td,td->line_for_route[route_index]);
 }
@@ -49,36 +38,77 @@ uint8_t *tdata_stop_point_attributes_for_index(tdata_t *td, spidx_t sp_index) {
     return td->stop_point_attributes + sp_index;
 }
 
-const char *tdata_vehicle_journey_id_for_index(tdata_t *td, uint32_t vj_index) {
+const char *tdata_vehicle_journey_id_for_index(tdata_t *td, vjidx_t vj_index) {
     return td->string_pool + td->vj_ids[vj_index];
 }
 
-const char *tdata_vehicle_journey_id_for_jp_vj_index(tdata_t *td, jpidx_t jp_index, uint32_t vj_index) {
-    return td->string_pool +  td->vj_ids[td->journey_patterns[jp_index].vj_offset + vj_index];
+const char *tdata_vehicle_journey_id_for_jp_vj_offset(tdata_t *td, jpidx_t jp_index, jp_vjoffset_t vj_offset) {
+    return tdata_vehicle_journey_id_for_index(td,td->journey_patterns[jp_index].vj_index + vj_offset);
 }
 
-const char *tdata_operator_id_for_index(tdata_t *td, uint32_t operator_index) {
+int32_t tdata_utc_offset_for_vj_index(tdata_t *td, vjidx_t vj_index) {
+    return td->utc_offset-td->vj_time_offsets[vj_index]*15*60;
+}
+
+int32_t tdata_stoptime_utc_for_index(tdata_t *td, jpidx_t jp_index, jppidx_t jpp_offset, jp_vjoffset_t vj_offset, bool arrival){
+    return tdata_stoptime_for_index(td,jp_index,jpp_offset,vj_offset,arrival) -
+            SIGNED_SEC_TO_RTIME(tdata_utc_offset_for_jp_vj_offset(td,jp_index,vj_offset));
+}
+
+rtime_t tdata_stoptime_for_index(tdata_t *td, jpidx_t jp_index, jppidx_t jpp_offset, jp_vjoffset_t vj_offset, bool arrival){
+    vjidx_t vj_index = td->journey_patterns[jp_index].vj_index + vj_offset;
+    vehicle_journey_t vj = td->vjs[vj_index];
+    return vj.begin_time + (arrival ? (td->stop_times[vj.stop_times_offset + jpp_offset]).arrival :
+                                     td->stop_times[vj.stop_times_offset + jpp_offset].departure);
+}
+
+rtime_t tdata_stoptime_local_for_index(tdata_t *td, jpidx_t jp_index, jppidx_t jpp_offset, jp_vjoffset_t vj_offset, bool arrival){
+    return (rtime_t) (tdata_stoptime_for_index(td,jp_index,jpp_offset,vj_offset,arrival) -
+            SIGNED_SEC_TO_RTIME(tdata_time_offset_for_jp_vj_offset(td, jp_index, vj_offset)));
+}
+
+int32_t tdata_utc_offset_for_jp_vj_offset(tdata_t *td, jpidx_t jp_index, jp_vjoffset_t vj_offset){
+    return tdata_utc_offset_for_vj_index(td, td->journey_patterns[jp_index].vj_index + vj_offset);
+}
+
+int32_t tdata_time_offset_for_vj_index(tdata_t *td, vjidx_t vj_index) {
+    return td->vj_time_offsets[vj_index]*15*60;
+}
+
+int32_t tdata_time_offset_for_jp_vj_offset(tdata_t *td, jpidx_t jp_index, jp_vjoffset_t vj_offset){
+    return tdata_time_offset_for_vj_index(td, td->journey_patterns[jp_index].vj_index + vj_offset);
+}
+
+const char *tdata_operator_id_for_index(tdata_t *td, opidx_t operator_index) {
     return td->string_pool + (td->operator_ids[operator_index]);
 }
 
-const char *tdata_operator_name_for_index(tdata_t *td, uint32_t operator_index) {
+const char *tdata_operator_name_for_index(tdata_t *td, opidx_t operator_index) {
     return td->string_pool + (td->operator_names[operator_index]);
 }
 
-const char *tdata_operator_url_for_index(tdata_t *td, uint32_t operator_index) {
+const char *tdata_operator_url_for_index(tdata_t *td, opidx_t operator_index) {
     return td->string_pool + (td->operator_urls[operator_index]);
 }
 
-const char *tdata_line_code_for_index(tdata_t *td, uint32_t line_index) {
+const char *tdata_line_code_for_index(tdata_t *td, lineidx_t line_index) {
     return td->string_pool + td->line_codes[line_index];
 }
 
-const char *tdata_line_name_for_index(tdata_t *td, uint32_t line_index) {
+const char *tdata_line_color_for_index(tdata_t *td, lineidx_t line_index) {
+    return td->string_pool + td->line_colors[line_index];
+}
+
+const char *tdata_line_color_text_for_index(tdata_t *td, lineidx_t line_index) {
+    return td->string_pool + td->line_colors_text[line_index];
+}
+
+const char *tdata_line_name_for_index(tdata_t *td, lineidx_t line_index) {
     if (td->line_names == NULL) return NULL;
     return td->string_pool + td->line_names[line_index];
 }
 
-const char *tdata_line_id_for_index(tdata_t *td, uint32_t line_index) {
+const char *tdata_line_id_for_index(tdata_t *td, lineidx_t line_index) {
     if (td->line_names == NULL) return NULL;
     return td->string_pool + td->line_ids[line_index];
 }
@@ -97,6 +127,14 @@ const char *tdata_name_for_physical_mode_index(tdata_t *td, uint32_t physical_mo
 
 const char *tdata_id_for_physical_mode_index(tdata_t *td, uint32_t physical_mode_index) {
     return td->string_pool + (td->physical_mode_ids[physical_mode_index]);
+}
+
+latlon_t *tdata_stop_point_coord_for_index(tdata_t *td, spidx_t sp_index){
+    return &td->stop_point_coords[sp_index];
+}
+
+latlon_t *tdata_stop_area_coord_for_index(tdata_t *td, spidx_t sa_index){
+    return &td->stop_area_coords[sa_index];
 }
 
 const char *tdata_platformcode_for_index(tdata_t *td, spidx_t sp_index) {
@@ -127,13 +165,26 @@ spidx_t tdata_stop_areaidx_for_index(tdata_t *td, spidx_t sp_index) {
     return td->stop_area_for_stop_point[sp_index];
 }
 
-spidx_t tdata_stop_areaidx_by_stop_area_name(tdata_t *td, char *stop_point_name, spidx_t sa_index_offset) {
+spidx_t tdata_stop_areaidx_by_stop_area_name(tdata_t *td, char *stop_area_name, spidx_t sa_index_offset) {
     spidx_t sa_index;
     for (sa_index = sa_index_offset;
          sa_index < td->n_stop_areas;
          ++sa_index) {
         if (strcasestr(td->string_pool + td->stop_area_nameidx[sa_index],
-                stop_point_name)) {
+                stop_area_name)) {
+            return sa_index;
+        }
+    }
+    return STOP_NONE;
+}
+
+spidx_t tdata_stop_areaidx_by_stop_area_id(tdata_t *td, char *stop_area_name, spidx_t sa_index_offset) {
+    spidx_t sa_index;
+    for (sa_index = sa_index_offset;
+         sa_index < td->n_stop_areas;
+         ++sa_index) {
+        if (!strcmp(td->string_pool + td->stop_area_ids[sa_index],
+                stop_area_name)) {
             return sa_index;
         }
     }
@@ -145,15 +196,13 @@ spidx_t tdata_stop_pointidx_by_stop_point_id(tdata_t *td, char *stop_point_id, s
     for (sp_index = sp_index_offset;
          sp_index < td->n_stop_points;
          ++sp_index) {
-        if (strcasestr(tdata_stop_point_id_for_index(td, sp_index),
+        if (!strcmp(tdata_stop_point_id_for_index(td, sp_index),
                 stop_point_id)) {
             return sp_index;
         }
     }
     return STOP_NONE;
 }
-
-#define tdata_stop_pointidx_by_stop_point_id(td, stop_id) tdata_stopidx_by_stop_id(td, stop_id, 0)
 
 jpidx_t tdata_journey_pattern_idx_by_line_id(tdata_t *td, char *line_id, jpidx_t jp_index_offset) {
     jpidx_t jp_index;
@@ -165,105 +214,132 @@ jpidx_t tdata_journey_pattern_idx_by_line_id(tdata_t *td, char *line_id, jpidx_t
             return jp_index;
         }
     }
-    return NONE;
+    return JP_NONE;
 }
-
-#define tdata_journey_pattern_idx_by_line_id(td, line_id) tdata_journey_pattern_idx_by_line_id(td, jp_index_offset, 0)
 
 calendar_t *tdata_vj_masks_for_journey_pattern(tdata_t *td, jpidx_t jp_index) {
     journey_pattern_t *jp = &(td->journey_patterns[jp_index]);
-    return td->vj_active + jp->vj_offset;
+    return td->vj_active + jp->vj_index;
 }
 
 const char *tdata_headsign_for_journey_pattern(tdata_t *td, jpidx_t jp_index) {
-    if (jp_index == NONE) return "NONE";
+    if (jp_index == JP_NONE) return "NONE";
     return td->string_pool + ((td->journey_pattern_point_headsigns)[(td->journey_patterns)[jp_index].journey_pattern_point_offset]);
 }
 
 const char *tdata_headsign_for_journey_pattern_point(tdata_t *td, jpidx_t jp_index, jppidx_t jpp_offset) {
-    if (jp_index == NONE) return "NONE";
+    if (jp_index == JP_NONE) return "NONE";
     return td->string_pool + ((td->journey_pattern_point_headsigns)[(td->journey_patterns)[jp_index].journey_pattern_point_offset + jpp_offset]);
 }
 
 const char *tdata_line_code_for_journey_pattern(tdata_t *td, jpidx_t jp_index) {
-    uint16_t route_index;
-    if (jp_index == NONE) return "NONE";
+    routeidx_t route_index;
+    if (jp_index == JP_NONE) return "NONE";
     route_index = (td->journey_patterns)[jp_index].route_index;
     return tdata_line_code_for_index(td, td->line_for_route[route_index]);
 }
 
+const char *tdata_line_color_for_journey_pattern(tdata_t *td, jpidx_t jp_index) {
+    routeidx_t route_index;
+    if (jp_index == JP_NONE) return "NONE";
+    route_index = (td->journey_patterns)[jp_index].route_index;
+    return tdata_line_color_for_index(td, td->line_for_route[route_index]);
+}
+
+const char *tdata_line_color_text_for_journey_pattern(tdata_t *td, jpidx_t jp_index) {
+    routeidx_t route_index;
+    if (jp_index == JP_NONE) return "NONE";
+    route_index = (td->journey_patterns)[jp_index].route_index;
+    return tdata_line_color_text_for_index(td, td->line_for_route[route_index]);
+}
+
 const char *tdata_line_name_for_journey_pattern(tdata_t *td, jpidx_t jp_index) {
-    uint16_t route_index;
-    if (jp_index == NONE) return "NONE";
+    routeidx_t route_index;
+    if (jp_index == JP_NONE) return "NONE";
     route_index = (td->journey_patterns)[jp_index].route_index;
     return tdata_line_name_for_index(td, td->line_for_route[route_index]);
 }
 
 const char *tdata_commercial_mode_name_for_journey_pattern(tdata_t *td, jpidx_t jp_index) {
-    if (jp_index == NONE) return "NONE";
+    if (jp_index == JP_NONE) return "NONE";
     return tdata_name_for_commercial_mode_index(td,(td->commercial_mode_for_jp)[jp_index]);
 }
 
 const char *tdata_commercial_mode_id_for_journey_pattern(tdata_t *td, jpidx_t jp_index) {
-    if (jp_index == NONE) return "NONE";
+    if (jp_index == JP_NONE) return "NONE";
     return tdata_id_for_commercial_mode_index(td,(td->commercial_mode_for_jp)[jp_index]);
 }
 
 const char *tdata_physical_mode_name_for_journey_pattern(tdata_t *td, jpidx_t jp_index) {
-    uint16_t route_index,line_index;
-    if (jp_index == NONE) return "NONE";
+    routeidx_t route_index;
+    lineidx_t line_index;
+    if (jp_index == JP_NONE) return "NONE";
     route_index = (td->journey_patterns)[jp_index].route_index;
     line_index = (td->line_for_route)[route_index];
     return tdata_name_for_physical_mode_index(td,(td->physical_mode_for_line)[line_index]);
 }
 
 const char *tdata_physical_mode_id_for_journey_pattern(tdata_t *td, jpidx_t jp_index) {
-    uint16_t route_index,line_index;
-    if (jp_index == NONE) return "NONE";
+    routeidx_t route_index;
+    lineidx_t line_index;
+    if (jp_index == JP_NONE) return "NONE";
     route_index = (td->journey_patterns)[jp_index].route_index;
     line_index = (td->line_for_route)[route_index];
     return tdata_id_for_physical_mode_index(td,(td->physical_mode_for_line)[line_index]);
 }
 
-uint32_t tdata_operatoridx_by_operator_name(tdata_t *td, char *operator_name, uint32_t operator_index_offset) {
-    uint32_t operator_index;
+opidx_t tdata_operator_idx_by_operator_name(tdata_t *td, const char *operator_name,
+                                            opidx_t operator_index_offset) {
+    opidx_t operator_index;
     for (operator_index = operator_index_offset;
          operator_index < td->n_operator_names;
          ++operator_index) {
         if (strcasestr(tdata_operator_name_for_index(td, operator_index),
-                operator_name)) {
+                       operator_name)) {
             return operator_index;
         }
     }
-    return NONE;
+    return OP_NONE;
+}
+
+opidx_t tdata_operator_idx_for_journey_pattern(tdata_t *td, jpidx_t jp_index) {
+    routeidx_t route_index;
+    lineidx_t line_index;
+    if (jp_index == JP_NONE) return OP_NONE;
+    route_index = (td->journey_patterns)[jp_index].route_index;
+    line_index = (td->line_for_route)[route_index];
+    return td->operator_for_line[line_index];
 }
 
 const char *tdata_operator_id_for_journey_pattern(tdata_t *td, jpidx_t jp_index) {
-    uint16_t route_index,line_index;
-    if (jp_index == NONE) return "NONE";
+    routeidx_t route_index;
+    lineidx_t line_index;
+    if (jp_index == JP_NONE) return "NONE";
     route_index = (td->journey_patterns)[jp_index].route_index;
     line_index = (td->line_for_route)[route_index];
     return tdata_operator_id_for_index(td, td->operator_for_line[line_index]);
 }
 
 const char *tdata_operator_name_for_journey_pattern(tdata_t *td, jpidx_t jp_index) {
-    uint16_t route_index,line_index;
-    if (jp_index == NONE) return "NONE";
+    routeidx_t route_index;
+    lineidx_t line_index;
+    if (jp_index == JP_NONE) return "NONE";
     route_index = (td->journey_patterns)[jp_index].route_index;
     line_index = (td->line_for_route)[route_index];
     return tdata_operator_name_for_index(td, td->operator_for_line[line_index]);
 }
 
 const char *tdata_operator_url_for_journey_pattern(tdata_t *td, jpidx_t jp_index) {
-    uint16_t route_index,line_index;
-    if (jp_index == NONE) return "NONE";
+    routeidx_t route_index;
+    lineidx_t line_index;
+    if (jp_index == JP_NONE) return "NONE";
     route_index = (td->journey_patterns)[jp_index].route_index;
     line_index = (td->line_for_route)[route_index];
     return tdata_operator_url_for_index(td, td->operator_for_line[line_index]);
 }
 
 bool tdata_load(tdata_t *td, char *filename) {
-    if ( !tdata_io_v3_load (td, filename)) return false;
+    if ( !tdata_io_v4_load (td, filename)) return false;
 
     #ifdef RRRR_FEATURE_REALTIME_EXPANDED
     if ( !tdata_alloc_expanded (td)) return false;
@@ -284,9 +360,7 @@ bool tdata_load(tdata_t *td, char *filename) {
 }
 
 void tdata_close(tdata_t *td) {
-    #ifdef RRRR_FEATURE_LATLON
     hashgrid_teardown (&td->hg);
-    #endif
 
     #ifdef RRRR_FEATURE_REALTIME
     if (td->stop_point_id_index) radixtree_destroy (td->stop_point_id_index);
@@ -300,7 +374,7 @@ void tdata_close(tdata_t *td) {
     tdata_clear_gtfsrt_alerts (td);
     #endif
     #endif
-    tdata_io_v3_close (td);
+    tdata_io_v4_close (td);
 }
 
 spidx_t *tdata_points_for_journey_pattern(tdata_t *td, jpidx_t jp_index) {
@@ -312,19 +386,19 @@ uint8_t *tdata_stop_point_attributes_for_journey_pattern(tdata_t *td, jpidx_t jp
     return td->journey_pattern_point_attributes + jp->journey_pattern_point_offset;
 }
 
-uint32_t tdata_journey_patterns_for_stop_point(tdata_t *td, spidx_t sp_index, jpidx_t **jp_ret) {
+jpidx_t tdata_journey_patterns_for_stop_point(tdata_t *td, spidx_t sp_index, jpidx_t **jp_ret) {
     stop_point_t *stop0 = &(td->stop_points[sp_index]);
     stop_point_t *stop1 = &(td->stop_points[sp_index + 1]);
     *jp_ret = td->journey_patterns_at_stop + stop0->journey_patterns_at_stop_point_offset;
     return stop1->journey_patterns_at_stop_point_offset - stop0->journey_patterns_at_stop_point_offset;
 }
 
-stoptime_t *tdata_timedemand_type(tdata_t *td, jpidx_t jp_index, jp_vjoffset_t vj_index) {
-    return td->stop_times + td->vjs[td->journey_patterns[jp_index].vj_offset + vj_index].stop_times_offset;
+stoptime_t *tdata_timedemand_type(tdata_t *td, jpidx_t jp_index, jp_vjoffset_t vj_offset) {
+    return td->stop_times + td->vjs[td->journey_patterns[jp_index].vj_index + vj_offset].stop_times_offset;
 }
 
 vehicle_journey_t *tdata_vehicle_journeys_in_journey_pattern(tdata_t *td, jpidx_t jp_index) {
-    return td->vjs + td->journey_patterns[jp_index].vj_offset;
+    return td->vjs + td->journey_patterns[jp_index].vj_index;
 }
 
 const char *tdata_stop_point_name_for_index(tdata_t *td, spidx_t sp_index) {
@@ -339,7 +413,22 @@ const char *tdata_stop_point_name_for_index(tdata_t *td, spidx_t sp_index) {
 }
 
 const char *tdata_stop_area_name_for_index(tdata_t *td, spidx_t sa_index) {
-    return td->string_pool + td->stop_area_nameidx[sa_index];
+    switch (sa_index) {
+        case STOP_NONE :
+            return "NONE";
+        case ONBOARD :
+            return "ONBOARD";
+        default :
+            return td->string_pool + td->stop_area_nameidx[sa_index];
+    }
+}
+
+const char *tdata_stop_area_id_for_index(tdata_t *td, spidx_t sa_index) {
+    return td->string_pool + td->stop_area_ids[sa_index];
+}
+
+const char *tdata_stop_area_timezone_for_index(tdata_t *td, spidx_t sa_index) {
+    return td->string_pool + td->stop_area_timezones[sa_index];
 }
 
 rtime_t tdata_stop_point_waittime (tdata_t *tdata, spidx_t sp_index) {
@@ -364,9 +453,9 @@ rtime_t transfer_duration (tdata_t *tdata, router_request_t *req, spidx_t sp_ind
 }
 
 #ifdef RRRR_DEBUG
-void tdata_dump_journey_pattern(tdata_t *td, jpidx_t jp_index, uint32_t vj_index) {
+void tdata_dump_journey_pattern(tdata_t *td, jpidx_t jp_index, jp_vjoffset_t vj_offset) {
     spidx_t *stops = tdata_points_for_journey_pattern(td, jp_index);
-    uint32_t ti;
+    jp_vjoffset_t vj_o;
     spidx_t si;
     journey_pattern_t jp = td->journey_patterns[jp_index];
     printf("\njourney_pattern details for %s %s %s '%s %s' [%d] (n_stops %d, n_vjs %d)\n"
@@ -378,28 +467,28 @@ void tdata_dump_journey_pattern(tdata_t *td, jpidx_t jp_index, uint32_t vj_index
         tdata_headsign_for_journey_pattern(td, jp_index),
         jp_index, jp.n_stops, jp.n_vjs);
 
-    for (ti = (vj_index == NONE ? 0 : vj_index);
-         ti < (vj_index == NONE ? jp.n_vjs :
-                                    vj_index + 1);
-         ++ti) {
-        stoptime_t *times = tdata_timedemand_type(td, jp_index, ti);
+    for (vj_o = (vj_offset == VJ_NONE ? 0 : vj_offset);
+         vj_o < (vj_offset == VJ_NONE ? jp.n_vjs :
+                                      vj_offset + 1);
+         ++vj_o) {
+        stoptime_t *times = tdata_timedemand_type(td, jp_index, vj_o);
         /* TODO should this really be a 2D array ?
-        stoptime_t (*times)[jp.n_stops] = (void*) tdata_timedemand_type(td, jp_index, ti); */
+        stoptime_t (*times)[jp.n_stops] = (void*) tdata_timedemand_type(td, jp_index, vj_o); */
 
-        printf("%s\n", tdata_vehicle_journey_id_for_index(td, jp.vj_offset + ti));
+        printf("%s\n", tdata_vehicle_journey_id_for_index(td, jp.vj_index + vj_o));
         for (si = 0; si < jp.n_stops; ++si) {
             const char *stop_id = tdata_stop_point_name_for_index (td, stops[si]);
             char arrival[13], departure[13];
             printf("%4d %35s [%06d] : %s %s",
                    si, stop_id, stops[si],
-                   btimetext(times[si].arrival + td->vjs[jp.vj_offset + ti].begin_time + RTIME_ONE_DAY, arrival),
-                   btimetext(times[si].departure + td->vjs[jp.vj_offset + ti].begin_time + RTIME_ONE_DAY, departure));
+                   btimetext(times[si].arrival + td->vjs[jp.vj_index + vj_o].begin_time + RTIME_ONE_DAY, arrival),
+                   btimetext(times[si].departure + td->vjs[jp.vj_index + vj_o].begin_time + RTIME_ONE_DAY, departure));
 
             #ifdef RRRR_FEATURE_REALTIME_EXPANDED
-            if (td->vj_stoptimes && td->vj_stoptimes[jp.vj_offset + ti]) {
+            if (td->vj_stoptimes && td->vj_stoptimes[jp.vj_index + vj_o]) {
                 printf (" %s %s",
-                        btimetext(td->vj_stoptimes[jp.vj_offset + ti][si].arrival + RTIME_ONE_DAY, arrival),
-                        btimetext(td->vj_stoptimes[jp.vj_offset + ti][si].departure + RTIME_ONE_DAY, departure));
+                        btimetext(td->vj_stoptimes[jp.vj_index + vj_o][si].arrival + RTIME_ONE_DAY, arrival),
+                        btimetext(td->vj_stoptimes[jp.vj_index + vj_o][si].departure + RTIME_ONE_DAY, departure));
             }
             #endif
 
@@ -458,31 +547,43 @@ void tdata_dump(tdata_t *td) {
          *        tdata_route_desc_for_index(td, i),
          *        tdata_vehicle_journey_ids_for_route(td, i));
          */
-        tdata_dump_journey_pattern(td, i, NONE);
+        tdata_dump_journey_pattern(td, i, VJ_NONE);
     }
 }
 #endif
 
-#ifdef RRRR_FEATURE_LATLON
 bool tdata_hashgrid_setup (tdata_t *tdata) {
-    coord_t *coords;
     uint32_t i_sp;
 
-    coords = (coord_t *) malloc(sizeof(coord_t) * tdata->n_stop_points);
-    if (!coords) return false;
+    tdata->coords = (coord_t *) malloc(sizeof(coord_t) * tdata->n_stop_points);
+    if (!tdata->coords) return false;
 
     i_sp = tdata->n_stop_points;
     do {
         i_sp--;
-        coord_from_latlon(coords + i_sp,
+        coord_from_latlon(tdata->coords + i_sp,
                           tdata->stop_point_coords + i_sp);
     } while(i_sp);
 
-    hashgrid_init (&tdata->hg, 100, 500.0, coords, tdata->n_stop_points);
+    if (!hashgrid_init (&tdata->hg, 100, 500.0, tdata->coords, tdata->n_stop_points)) {
+        return false;
+    }
 
     return true;
 }
-#endif
+
+void tdata_hashgrid_teardown (tdata_t *tdata) {
+    free (tdata->coords);
+}
+
+bool strtoopidx (const char *str, tdata_t *td, opidx_t *op, char **endptr) {
+    long op_idx = strtol(str, endptr, 10);
+    if (op_idx >= 0 && op_idx < td->n_operator_ids) {
+        *op = (opidx_t) op_idx;
+        return true;
+    }
+    return false;
+}
 
 bool strtospidx (const char *str, tdata_t *td, spidx_t *sp, char **endptr) {
     long stop_idx = strtol(str, endptr, 10);
@@ -517,7 +618,7 @@ radixtree_t *tdata_radixtree_string_pool_setup (tdata_t *td, uint32_t *s, uint32
     uint32_t idx;
     radixtree_t *r = radixtree_new();
     for (idx = 0; idx < n; idx++) {
-        radixtree_insert (r, td->string_pool + s[idx], n);
+        radixtree_insert (r, td->string_pool + s[idx], idx);
     }
     return r;
 }
@@ -553,13 +654,13 @@ bool tdata_realtime_setup (tdata_t *tdata) {
 
 void tdata_validity (tdata_t *tdata, uint64_t *min, uint64_t *max) {
     *min = tdata->calendar_start_time;
-    *max = tdata->calendar_start_time + (tdata->n_days - 1) * 86400;
+    *max = tdata->calendar_start_time + (tdata->n_days - 1) * SEC_IN_ONE_DAY;
 }
 
 void tdata_extends (tdata_t *tdata, latlon_t *ll, latlon_t *ur) {
     spidx_t i_stop = (spidx_t) tdata->n_stop_points;
 
-    float min_lon = 180.0f, min_lat = 90.0f, max_lon = -180.0f, max_lat = -90.f;
+    float min_lon = 180.0f, min_lat = 90.0f, max_lon = -180.0f, max_lat = -90.0f;
 
     do {
         i_stop--;
@@ -589,3 +690,11 @@ void tdata_modes (tdata_t *tdata, tmode_t *m) {
 
     *m = (tmode_t) attributes;
 }
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-macros"
+
+#define tdata_stop_pointidx_by_stop_point_id(td, stop_id) tdata_stopidx_by_stop_id(td, stop_id, 0)
+#define tdata_journey_pattern_idx_by_line_id(td, line_id) tdata_journey_pattern_idx_by_line_id(td, jp_index_offset, 0)
+
+#pragma clang diagnostic pop

@@ -46,7 +46,7 @@ JNIEXPORT jstring JNICALL Java_ru_smarttransport_citytransport_rrrrandroid_R4_ge
 JNIEXPORT jboolean JNICALL Java_ru_smarttransport_citytransport_rrrrandroid_R4_initWithFile
   (JNIEnv *env, jobject thisObj, jstring filePath)
 {
-    const char *nativeString = (*env)->GetStringUTFChars(env, filePath, JNI_FALSE);
+    char *nativeString = (*env)->GetStringUTFChars(env, filePath, JNI_FALSE);
     bool result;
 
     __android_log_print(ANDROID_LOG_ERROR, DEBUG_TAG, "%s", nativeString);
@@ -117,6 +117,10 @@ JNIEXPORT jstring JNICALL Java_ru_smarttransport_citytransport_rrrrandroid_R4_pl
     }
     req.time_rounded = false;
 
+    if (! tdata_hashgrid_setup (&tdata)) {
+            return (*env)->NewStringUTF(env, "");
+    }
+
     if (req.arrive_by) {
         req.time_cutoff = 0;
     } else {
@@ -124,6 +128,7 @@ JNIEXPORT jstring JNICALL Java_ru_smarttransport_citytransport_rrrrandroid_R4_pl
     }
 
     memset (&plan, 0, sizeof(plan_t));
+    router_result_init_plan(&plan);
          __android_log_print(ANDROID_LOG_ERROR, DEBUG_TAG, "%s", "begin route");
     if ( router_route_full_reversal(&router, &req, &plan) ) {
         __android_log_print(ANDROID_LOG_ERROR, DEBUG_TAG, "%s", "begin output");

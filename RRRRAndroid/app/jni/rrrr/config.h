@@ -1,3 +1,8 @@
+/* Copyright 2013-2015 Bliksem Labs B.V.
+ * See the LICENSE file at the top-level directory of this distribution and at
+ * https://github.com/bliksemlabs/rrrr/
+ */
+
 #ifndef _CONFIG_H
 #define _CONFIG_H
 
@@ -12,6 +17,9 @@
 /* Speed by foot, in meter per second */
 #define RRRR_DEFAULT_WALK_SPEED 1.5
 
+/*Maximum stops to enter or exit a journey */
+#define RRRR_MAX_ENTRY_EXIT_POINTS 2500
+
 /* Maximum distance in meters to travel by feet from the
  * origin to the first stop_point, and from the last stop_point to
  * the destination.
@@ -19,15 +27,16 @@
 #define RRRR_DEFAULT_WALK_MAX_DISTANCE 500
 
 #define RRRR_MAX_BANNED_JOURNEY_PATTERNS 1
+#define RRRR_MAX_BANNED_OPERATORS 1
 #define RRRR_MAX_BANNED_STOP_POINTS 1
 #define RRRR_MAX_BANNED_STOP_POINTS_HARD 1
 #define RRRR_MAX_BANNED_VEHICLE_JOURNEYS 1
 
-#define RRRR_FEATURE_LATLON 1
+#define RRRR_MAX_FILTERED_OPERATORS 1
 
 #define RRRR_WALK_COMP 1.2
 
-#define RRRR_BANNED_JOURNEY_PATTERNS_BITMASK 0
+#define RRRR_BANNED_JOURNEY_PATTERNS_BITMASK 1
 
 #if RRRR_MAX_BANNED_JOURNEY_PATTERNS == 0
 #undef RRRR_BANNED_JOURNEY_PATTERNS_BITMASK
@@ -38,6 +47,10 @@
 #endif
 
 #define RRRR_DYNAMIC_SLACK 2
+
+#ifdef RRRR_DEBUG
+#define RRRR_DEV
+#endif
 
 /* roughly the length of common prefixes in IDs */
 #define RRRR_RADIXTREE_PREFIX_SIZE 4

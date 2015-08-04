@@ -1,3 +1,8 @@
+/* Copyright 2013-2015 Bliksem Labs B.V.
+ * See the LICENSE file at the top-level directory of this distribution and at
+ * https://github.com/bliksemlabs/rrrr/
+ */
+
 /* router.h */
 
 #ifndef _ROUTER_H
@@ -14,11 +19,8 @@
 #include <stdint.h>
 #include <time.h>
 
-/* When associated with a stop_point index,
- * a router_state_t describes a leg of an itinerary.
- */
 
-/* We could potentially remove the back_time from router_state,
+/* We could potentially remove the states_board_time from router,
  * but this requires implementing some lookup functions and storing
  * the back_vj_stop_point rather than the back_stop_point (global stop_point index):
  * a vehicle_journey can pass through a stop_point more than once.
@@ -75,9 +77,6 @@ struct router {
     /* Used to ban journey_patterns and in the final clockwise search optimise */
     bitset_t *banned_journey_patterns;
 #endif
-
-    spidx_t origin;
-    spidx_t target;
 
     calendar_t day_mask;
     serviceday_t servicedays[3];
